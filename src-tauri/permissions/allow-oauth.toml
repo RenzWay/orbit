@@ -1,0 +1,4 @@
+[[permission]]
+identifier = "allow-oauth"
+description = "Allows OAuth callback port access"
+commands.allow = ["get_oauth_port"]
