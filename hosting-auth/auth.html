@@ -1,0 +1,117 @@
+<!doctype html>
+<html lang="id">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>Login Orbit</title>
+    <style>
+      body {
+        font-family: system-ui, sans-serif;
+        background: #14172b;
+        color: #ede6d6;
+        height: 100vh;
+        margin: 0;
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        text-align: center;
+      }
+      button {
+        background: #e8a54b;
+        color: #14172b;
+        border: none;
+        padding: 14px 28px;
+        border-radius: 999px;
+        font-size: 15px;
+        font-weight: 600;
+        cursor: pointer;
+      }
+      button:disabled {
+        opacity: 0.6;
+        cursor: default;
+      }
+      p {
+        color: #8b8e9e;
+        font-size: 13px;
+      }
+    </style>
+  </head>
+  <body>
+    <div>
+      <h2>Login ke Orbit</h2>
+      <p id="status">Klik tombol untuk login dengan akun Google kamu.</p>
+      <button id="loginBtn">Login dengan Google</button>
+    </div>
+
+    <script type="module">
+      import { initializeApp } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-app.js";
+      import {
+        getAuth,
+        GoogleAuthProvider,
+        signInWithRedirect,
+        getRedirectResult,
+      } from "https://www.gstatic.com/firebasejs/10.13.0/firebase-auth.js";
+
+      const firebaseConfig = {
+        apiKey: "AIzaSyAmXGFQjrg5Y0fZFsmVveZmOsuFT2x0-fc",
+        authDomain: "letter-26c71.firebaseapp.com",
+        databaseURL:
+          "https://letter-26c71-default-rtdb.asia-southeast1.firebasedatabase.app",
+        projectId: "letter-26c71",
+        storageBucket: "letter-26c71.firebasestorage.app",
+        messagingSenderId: "980332186200",
+        appId: "1:980332186200:web:219c3c013552704581d82d",
+      };
+
+      const app = initializeApp(firebaseConfig);
+      const auth = getAuth(app);
+      const provider = new GoogleAuthProvider();
+
+      const statusEl = document.getElementById("status");
+      const btn = document.getElementById("loginBtn");
+
+      function sendTokenBackToApp(googleIdToken) {
+        statusEl.textContent = "Berhasil login. Kembali ke aplikasi Orbit...";
+        btn.style.display = "none";
+        const deepLink = `orbit://auth-callback?idToken=${encodeURIComponent(googleIdToken)}`;
+        window.location.href = deepLink;
+
+        setTimeout(() => {
+          statusEl.textContent =
+            "Kalau app Orbit belum otomatis kebuka, kamu bisa tutup tab ini dan buka manual.";
+        }, 2500);
+      }
+
+      // Cek dulu: mungkin ini halaman yang baru "pulang" dari redirect Google
+      getRedirectResult(auth)
+        .then((result) => {
+          if (!result) return;
+          // PENTING: ambil credential Google asli (idToken dari Google),
+          // BUKAN result.user.getIdToken() yang itu token Firebase, bukan Google.
+          const credential = GoogleAuthProvider.credentialFromResult(result);
+          if (credential?.idToken) {
+            sendTokenBackToApp(credential.idToken);
+          } else {
+            statusEl.textContent =
+              "Login berhasil tapi credential Google tidak ditemukan. Coba lagi.";
+          }
+        })
+        .catch((e) => {
+          console.error(e);
+          statusEl.textContent = "Terjadi error saat login. Coba lagi.";
+        });
+
+      btn.addEventListener("click", async () => {
+        btn.disabled = true;
+        statusEl.textContent = "Membuka login Google...";
+        try {
+          await signInWithRedirect(auth, provider);
+        } catch (e) {
+          console.error(e);
+          statusEl.textContent = "Gagal membuka login Google. Coba lagi.";
+          btn.disabled = false;
+        }
+      });
+    </script>
+  </body>
+</html>

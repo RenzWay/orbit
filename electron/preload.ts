@@ -1,0 +1,11 @@
+import { contextBridge, ipcRenderer } from "electron";
+
+contextBridge.exposeInMainWorld("electronAPI", {
+  openExternal: (url: string) => ipcRenderer.invoke("open-external", url),
+  onDeepLink: (callback: (url: string) => void) => {
+    const listener = (_event: Electron.IpcRendererEvent, url: string) => callback(url);
+    ipcRenderer.on("deep-link", listener);
+
+    return () => ipcRenderer.removeListener("deep-link", listener);
+  },
+});
