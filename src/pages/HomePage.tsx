@@ -1,5 +1,8 @@
 import { DarkToggle } from "@/components/button/DarkToggle";
-import { ClipboardModal } from "@/components/other/ClipboardModal";
+import {
+  ClipboardModal,
+  type ClipboardHistoryItem,
+} from "@/components/other/ClipboardModal";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import { handleLogout } from "@/handle/handleAuth";
@@ -7,13 +10,16 @@ import { type Device } from "@/interface/interface";
 import { orbitModel } from "@/models/orbitModel";
 import { webRTCService } from "@/services/webrtcService";
 import { LogOut, MonitorX, Send, UploadCloud } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 
 export default function HomePage({ userId }: { userId: string }) {
   const [devices, setDevices] = useState<Device[]>([]);
   const [selectedDevice, setSelectedDevice] = useState<Device | null>(null);
+  const [clipboardHistory, setClipboardHistory] = useState<
+    ClipboardHistoryItem[]
+  >([]);
 
-  const currentUser = userId ? { uid: userId } : null;
+  const currentUser = useMemo(() => (userId ? { uid: userId } : null), [userId]);
   const currentDeviceId = "pc-desktop";
 
   useEffect(() => {
@@ -24,6 +30,43 @@ export default function HomePage({ userId }: { userId: string }) {
       currentDeviceId,
       "My Dekstop Pc",
     );
+
+    // PENTING: mulai dengerin panggilan masuk begitu login, JANGAN nunggu
+    // user pilih device dulu — biar PC selalu siap "ngangkat telepon"
+    // kapan pun HP/device lain nyoba connect.
+    webRTCService.listenForIncomingCalls(currentUser.uid, currentDeviceId);
+
+    // Callback status — INI YANG SEBELUMNYA GA ADA, makanya kirim/gagal
+    // ga ada pemberitahuan sama sekali di UI.
+    webRTCService.onConnectionOpen = () => {
+      alert("Koneksi P2P berhasil terhubung!");
+    };
+    webRTCService.onFileReceived = (blob, meta) => {
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = meta.name;
+      a.click();
+      URL.revokeObjectURL(url);
+      alert(`File "${meta.name}" berhasil diterima!`);
+    };
+    webRTCService.onClipboardReceived = (text) => {
+      setClipboardHistory((history) => [
+        {
+          id: crypto.randomUUID(),
+          text,
+          time: new Intl.DateTimeFormat("id-ID", {
+            hour: "2-digit",
+            minute: "2-digit",
+          }).format(new Date()),
+          isUrl: /^https?:\/\//i.test(text),
+        },
+        ...history,
+      ]);
+    };
+    webRTCService.onError = (message) => {
+      alert(`Gagal: ${message}`);
+    };
 
     const unsubscribe = orbitModel.listenToDevices(
       currentUser.uid,
@@ -40,7 +83,13 @@ export default function HomePage({ userId }: { userId: string }) {
       },
     );
 
-    return () => unsubscribe();
+    return () => {
+      unsubscribe();
+      webRTCService.onConnectionOpen = undefined;
+      webRTCService.onFileReceived = undefined;
+      webRTCService.onClipboardReceived = undefined;
+      webRTCService.onError = undefined;
+    };
   }, [currentUser]);
 
   useEffect(() => {
@@ -63,10 +112,18 @@ export default function HomePage({ userId }: { userId: string }) {
     }
   };
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      webRTCService.sendFile(file);
+  const handleFileChange = async (
+    event: React.ChangeEvent<HTMLInputElement>,
+  ) => {
+    const file = event.target.files?.[0];
+
+    if (!file) return;
+
+    try {
+      await webRTCService.waitForConnection();
+      await webRTCService.sendFile(file);
+    } catch (error) {
+      console.error("Gagal mengirim file via P2P:", error);
     }
   };
 
@@ -219,7 +276,11 @@ export default function HomePage({ userId }: { userId: string }) {
                   <Send size={18} />
                   Send File
                 </Button>
-                <ClipboardModal handle={handleConnectP2P} />
+                <ClipboardModal
+                  handle={handleConnectP2P}
+                  history={clipboardHistory}
+                  onClearHistory={() => setClipboardHistory([])}
+                />
               </div>
             </div>
           </>

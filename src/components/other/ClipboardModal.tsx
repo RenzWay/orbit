@@ -10,35 +10,30 @@ import {
   DialogTrigger,
 } from "../ui/dialog";
 
-export function ClipboardModal({ handle }: { handle: () => void }) {
+export interface ClipboardHistoryItem {
+  id: string;
+  text: string;
+  time: string;
+  isUrl?: boolean;
+}
+
+interface ClipboardModalProps {
+  handle: () => void;
+  history: ClipboardHistoryItem[];
+  onClearHistory: () => void;
+}
+
+export function ClipboardModal({
+  handle,
+  history,
+  onClearHistory,
+}: ClipboardModalProps) {
   const [copiedId, setCopiedId] = useState<string | null>(null);
-  const [history, setHistory] = useState([
-    {
-      id: "1",
-      text: "sekarang ini sedang lagi apa dong kamu aku kangen nich",
-      time: "2 mins ago",
-    },
-    {
-      id: "2",
-      text: "https://github.com/shadcn-ui/ui",
-      time: "10 mins ago",
-      isUrl: true,
-    },
-    {
-      id: "3",
-      text: "aku ga tau ya begitulah sampe aku juga bingung mau ngapain nich ...",
-      time: "1 hour ago",
-    },
-  ]);
 
   const handleCopy = (id: string, text: string) => {
     navigator.clipboard.writeText(text);
     setCopiedId(id);
     setTimeout(() => setCopiedId(null), 2000); // Reset icon centang setelah 2 detik
-  };
-
-  const clearHistory = () => {
-    setHistory([]);
   };
 
   return (
@@ -48,8 +43,7 @@ export function ClipboardModal({ handle }: { handle: () => void }) {
           onClick={handle}
           size="lg"
           variant="secondary"
-          className="rounded-xl gap-2 px-6 h-12 cursor-pointer"
-        >
+          className="rounded-xl gap-2 px-6 h-12 cursor-pointer">
           <Clipboard size={18} />
           Copy Clipboard
         </Button>
@@ -74,10 +68,9 @@ export function ClipboardModal({ handle }: { handle: () => void }) {
             <Button
               variant="ghost"
               size="icon"
-              onClick={clearHistory}
+              onClick={onClearHistory}
               className="text-slate-400 hover:text-red-400 hover:bg-red-500/10 rounded-lg h-8 w-8 transition-colors"
-              title="Clear all"
-            >
+              title="Clear all">
               <Trash2 size={16} />
             </Button>
           )}
@@ -92,11 +85,10 @@ export function ClipboardModal({ handle }: { handle: () => void }) {
             </div>
           ) : (
             <div className="flex flex-col gap-2.5 pt-2">
-              {history.map((item) => (
+              {history.map((item: ClipboardHistoryItem) => (
                 <div
                   key={item.id}
-                  className="group relative flex items-start justify-between gap-3 p-3 bg-slate-800/40 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/30 rounded-xl transition-all"
-                >
+                  className="group relative flex items-start justify-between gap-3 p-3 bg-slate-800/40 hover:bg-slate-800/80 border border-slate-800 hover:border-sky-500/30 rounded-xl transition-all">
                   <div className="flex gap-2.5 items-start flex-1 min-w-0">
                     <div className="mt-0.5 text-slate-400 group-hover:text-sky-400 transition-colors">
                       {item.isUrl ? (
@@ -120,8 +112,7 @@ export function ClipboardModal({ handle }: { handle: () => void }) {
                     size="icon"
                     variant="ghost"
                     onClick={() => handleCopy(item.id, item.text)}
-                    className="h-8 w-8 shrink-0 text-slate-400 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg transition-all"
-                  >
+                    className="h-8 w-8 shrink-0 text-slate-400 hover:text-sky-400 hover:bg-sky-500/10 rounded-lg transition-all">
                     {copiedId === item.id ? (
                       <Check size={14} className="text-green-400" />
                     ) : (

@@ -1,4 +1,4 @@
-import { app, BrowserWindow, ipcMain } from 'electron'
+import { app, BrowserWindow, clipboard, ipcMain } from 'electron'
 import path from 'node:path'
 import { fileURLToPath } from 'node:url'
 
@@ -114,4 +114,11 @@ ipcMain.handle('open-external', async (_event, url: string) => {
   }
   const { shell } = await import('electron')
   await shell.openExternal(url)
+})
+
+ipcMain.handle('write-clipboard', (_event, text: unknown) => {
+  if (typeof text !== 'string') {
+    throw new Error('Clipboard text must be a string')
+  }
+  clipboard.writeText(text)
 })
