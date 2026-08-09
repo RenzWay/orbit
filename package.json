@@ -41,8 +41,12 @@
     },
     "linux": {
       "target": [
-        "AppImage"
-      ]
+        "AppImage",
+        "deb",
+        "snap",
+        "tar.gz"
+      ],
+      "maintainer": "RenzWay <email-kamu@example.com>"
     }
   },
   "dependencies": {
