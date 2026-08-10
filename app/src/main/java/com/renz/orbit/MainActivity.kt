@@ -2,27 +2,28 @@ package com.renz.orbit
 
 import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.Context
+import android.content.ContentValues
 import android.content.Intent
 import android.net.Uri
-import android.os.Bundle
 import android.os.Build
-import android.content.ContentValues
+import android.os.Bundle
 import android.os.Environment
 import android.provider.MediaStore
-import java.io.OutputStream
-import java.io.FileOutputStream
-import java.io.File
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.runtime.*
+import androidx.compose.runtime.DisposableEffect
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
-import androidx.compose.ui.tooling.preview.Preview
 import com.google.firebase.auth.FirebaseAuth
 import com.renz.orbit.service.AuthManager
 import com.renz.orbit.service.Device
@@ -34,10 +35,24 @@ import com.renz.orbit.ui.screen.LoginPage
 import com.renz.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.launch
 import org.json.JSONObject
+import java.io.File
+import java.io.FileOutputStream
+import java.io.OutputStream
 
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
     private lateinit var orbitPresence: OrbitPresence
+
+    private fun getRealDeviceName(): String {
+        val manufacturer = Build.MANUFACTURER
+        val model = Build.MODEL
+
+        return if (model.lowercase().startsWith(manufacturer.lowercase())) {
+            model.replaceFirstChar { it.uppercase() }
+        } else {
+            "${manufacturer.replaceFirstChar { it.uppercase() }} $model"
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,10 +90,13 @@ class MainActivity : ComponentActivity() {
                     uri?.let {
                         scope.launch {
                             try {
-                                val cursor = context.contentResolver.query(it, null, null, null, null)
-                                val nameIndex = cursor?.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                                val cursor =
+                                    context.contentResolver.query(it, null, null, null, null)
+                                val nameIndex =
+                                    cursor?.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
                                 cursor?.moveToFirst()
-                                val fileName = nameIndex?.let { i -> cursor.getString(i) } ?: "file_${System.currentTimeMillis()}"
+                                val fileName = nameIndex?.let { i -> cursor.getString(i) }
+                                    ?: "file_${System.currentTimeMillis()}"
                                 cursor?.close()
 
                                 val meta = JSONObject().apply {
@@ -91,7 +109,10 @@ class MainActivity : ComponentActivity() {
                                     val buffer = ByteArray(16384)
                                     var bytesRead: Int
                                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                        val chunk = if (bytesRead == buffer.size) buffer else buffer.copyOf(bytesRead)
+                                        val chunk =
+                                            if (bytesRead == buffer.size) buffer else buffer.copyOf(
+                                                bytesRead
+                                            )
                                         webRtcManager.sendBinary(chunk)
                                     }
                                 }
@@ -99,7 +120,11 @@ class MainActivity : ComponentActivity() {
                                 val complete = JSONObject().apply { put("type", "file-complete") }
                                 webRtcManager.sendData(complete.toString())
 
-                                Toast.makeText(context, "File '$fileName' terkirim!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(
+                                    context,
+                                    "File '$fileName' terkirim!",
+                                    Toast.LENGTH_SHORT
+                                ).show()
                             } catch (e: Exception) {
                                 Log.e("MainActivity", "Gagal kirim file: ${e.message}")
                             }
@@ -137,21 +162,42 @@ class MainActivity : ComponentActivity() {
                                         try {
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                                 val values = ContentValues().apply {
-                                                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                                                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                                                    put(
+                                                        MediaStore.MediaColumns.DISPLAY_NAME,
+                                                        fileName
+                                                    )
+                                                    put(
+                                                        MediaStore.MediaColumns.RELATIVE_PATH,
+                                                        Environment.DIRECTORY_DOWNLOADS
+                                                    )
                                                 }
-                                                val fileUri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                                                currentOutputStream = fileUri?.let { context.contentResolver.openOutputStream(it) }
+                                                val fileUri = context.contentResolver.insert(
+                                                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                                    values
+                                                )
+                                                currentOutputStream = fileUri?.let {
+                                                    context.contentResolver.openOutputStream(it)
+                                                }
                                             } else {
                                                 @Suppress("DEPRECATION")
-                                                val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                                val downloadDir =
+                                                    Environment.getExternalStoragePublicDirectory(
+                                                        Environment.DIRECTORY_DOWNLOADS
+                                                    )
                                                 val file = File(downloadDir, fileName)
                                                 currentOutputStream = FileOutputStream(file)
                                             }
                                             currentDownloadName = fileName
-                                            Toast.makeText(context, "Menerima: $fileName", Toast.LENGTH_SHORT).show()
+                                            Toast.makeText(
+                                                context,
+                                                "Menerima: $fileName",
+                                                Toast.LENGTH_SHORT
+                                            ).show()
                                         } catch (e: Exception) {
-                                            Log.e("MainActivity", "Gagal siapkan download: ${e.message}")
+                                            Log.e(
+                                                "MainActivity",
+                                                "Gagal siapkan download: ${e.message}"
+                                            )
                                         }
                                     }
 
@@ -159,7 +205,11 @@ class MainActivity : ComponentActivity() {
                                         currentOutputStream?.flush()
                                         currentOutputStream?.close()
                                         currentOutputStream = null
-                                        Toast.makeText(context, "Selesai: $currentDownloadName", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            "Selesai: $currentDownloadName",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                         currentDownloadName = null
                                     }
                                 }
@@ -183,7 +233,7 @@ class MainActivity : ComponentActivity() {
 
                 LaunchedEffect(currentUser) {
                     if (currentUser != null) {
-                        orbitPresence.setDeviceOnline("Vivo Y12s")
+                        orbitPresence.setDeviceOnline(getRealDeviceName())
                         orbitPresence.listenToOtherDevices { devices ->
                             otherDevices = devices
 

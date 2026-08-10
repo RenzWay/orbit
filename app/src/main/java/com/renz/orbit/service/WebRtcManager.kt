@@ -1,6 +1,8 @@
 package com.renz.orbit.service
 
 import android.content.Context
+import android.net.wifi.WifiManager
+import android.os.PowerManager
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
@@ -33,6 +35,16 @@ class WebRtcManager(private val context: Context) {
     private val addedIceCandidates = mutableSetOf<String>()
     private var processedRemoteSdp: String? = null
 
+    // Nahan radio WiFi & CPU tetap nyala selama koneksi P2P aktif, biar ga
+    // diputus sama power-saving pas layar mati / app di-background.
+    // WAJIB di-release() pas close(), kalau kelupaan bisa nguras baterai.
+    private val wifiLock: WifiManager.WifiLock = (context.applicationContext
+        .getSystemService(Context.WIFI_SERVICE) as WifiManager)
+        .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "orbit:transfer")
+    private val wakeLock: PowerManager.WakeLock = (context.applicationContext
+        .getSystemService(Context.POWER_SERVICE) as PowerManager)
+        .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "orbit:transfer")
+
     var onDataReceived: ((String) -> Unit)? = null
     var onBinaryReceived: ((ByteArray) -> Unit)? = null
     var onConnectionStateChanged: ((Boolean) -> Unit)? = null
@@ -52,6 +64,9 @@ class WebRtcManager(private val context: Context) {
 
     // 1. Inisialisasi PeerConnection & ICE Server (Google STUN)
     fun createPeerConnection(targetDeviceId: String, myDeviceId: String, isInitiator: Boolean) {
+        if (!wifiLock.isHeld) wifiLock.acquire()
+        if (!wakeLock.isHeld) wakeLock.acquire(10 * 60 * 1000L) // timeout jaga-jaga 10 menit
+
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
         )
@@ -329,6 +344,8 @@ class WebRtcManager(private val context: Context) {
 
     fun close() {
         try {
+            if (wifiLock.isHeld) wifiLock.release()
+            if (wakeLock.isHeld) wakeLock.release()
             addedIceCandidates.clear()
             processedRemoteSdp = null
             pendingIceCandidates.clear()
