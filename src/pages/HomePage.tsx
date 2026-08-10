@@ -19,22 +19,33 @@ export default function HomePage({ userId }: { userId: string }) {
     ClipboardHistoryItem[]
   >([]);
 
-  const currentUser = useMemo(() => (userId ? { uid: userId } : null), [userId]);
-  const currentDeviceId = "pc-desktop";
+  const currentUser = useMemo(
+    () => (userId ? { uid: userId } : null),
+    [userId],
+  );
+  const [deviceInfo, setDeviceInfo] = useState<{
+    id: string;
+    name: string;
+  } | null>(null);
 
   useEffect(() => {
-    if (!currentUser) return;
+    window.electronAPI.getDeviceInfo().then(({ hostname, platform }) => {
+      setDeviceInfo({
+        id: hostname,
+        name: `${hostname} (${platform})`,
+      });
+    });
+  }, []);
 
-    orbitModel.setDeviceOnline(
-      currentUser.uid,
-      currentDeviceId,
-      "My Dekstop Pc",
-    );
+  useEffect(() => {
+    if (!currentUser || !deviceInfo) return;
+
+    orbitModel.setDeviceOnline(currentUser.uid, deviceInfo.id, deviceInfo.name);
 
     // PENTING: mulai dengerin panggilan masuk begitu login, JANGAN nunggu
     // user pilih device dulu — biar PC selalu siap "ngangkat telepon"
     // kapan pun HP/device lain nyoba connect.
-    webRTCService.listenForIncomingCalls(currentUser.uid, currentDeviceId);
+    webRTCService.listenForIncomingCalls(currentUser.uid, deviceInfo.id);
 
     // Callback status — INI YANG SEBELUMNYA GA ADA, makanya kirim/gagal
     // ga ada pemberitahuan sama sekali di UI.
@@ -72,14 +83,19 @@ export default function HomePage({ userId }: { userId: string }) {
       currentUser.uid,
       (deviceList) => {
         const otherDevices = deviceList.filter(
-          (dev) => dev.id !== currentDeviceId,
+          (dev) => dev.id !== deviceInfo.id,
         );
         setDevices(otherDevices);
 
-        // Auto select device pertama kalau belum ada yang dipilih
-        if (otherDevices.length > 0 && !selectedDevice) {
-          setSelectedDevice(otherDevices[0]);
-        }
+        setSelectedDevice((prevSelected) => {
+          if (
+            prevSelected &&
+            otherDevices.some((dev) => dev.id === prevSelected.id)
+          ) {
+            return prevSelected;
+          }
+          return otherDevices[0] ?? null;
+        });
       },
     );
 
@@ -90,24 +106,29 @@ export default function HomePage({ userId }: { userId: string }) {
       webRTCService.onClipboardReceived = undefined;
       webRTCService.onError = undefined;
     };
-  }, [currentUser]);
+  }, [currentUser, deviceInfo]);
 
   useEffect(() => {
-    if (currentUser && selectedDevice && selectedDevice.status === "online") {
+    if (
+      currentUser &&
+      deviceInfo &&
+      selectedDevice &&
+      selectedDevice.status === "online"
+    ) {
       webRTCService.createOffer(
         currentUser.uid,
         selectedDevice.id,
-        currentDeviceId,
+        deviceInfo.id,
       );
     }
-  }, [selectedDevice, currentUser]);
+  }, [selectedDevice, currentUser, deviceInfo]);
 
   const handleConnectP2P = () => {
-    if (currentUser && selectedDevice) {
+    if (currentUser && deviceInfo && selectedDevice) {
       webRTCService.createOffer(
         currentUser.uid,
         selectedDevice.id,
-        currentDeviceId,
+        deviceInfo.id,
       );
     }
   };
