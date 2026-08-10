@@ -2,6 +2,7 @@ import {
   onDisconnect,
   onValue,
   ref,
+  remove,
   serverTimestamp,
   set,
 } from "firebase/database";
@@ -75,6 +76,17 @@ class OrbitModel {
           : [],
       );
     });
+  }
+
+    /**
+   * "Unsync" device: hapus node-nya dari presence list.
+   * Catatan: kalau device itu masih nyala & masih connect ke Firebase, dia
+   * bisa nulis dirinya sendiri online lagi (via setDeviceOnline / onDisconnect
+   * yang lagi jalan di device itu). Jadi ini paling reliable buat device yang
+   * emang udah offline / ga kepake lagi, bukan buat "block" device aktif.
+   */
+  removeDevice(userId:string,deviceId:string){
+    return remove(ref(db,`presence/${userId}/${deviceId}`))
   }
 }
 

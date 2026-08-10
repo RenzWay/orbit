@@ -5,11 +5,12 @@ import {
 } from "@/components/other/ClipboardModal";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
+import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
 import { handleLogout } from "@/handle/handleAuth";
 import { type Device } from "@/interface/interface";
 import { orbitModel } from "@/models/orbitModel";
 import { webRTCService } from "@/services/webrtcService";
-import { LogOut, MonitorX, Send, UploadCloud } from "lucide-react";
+import { LogOut, MonitorX, Send, Trash2, UploadCloud } from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function HomePage({ userId }: { userId: string }) {
@@ -133,6 +134,24 @@ export default function HomePage({ userId }: { userId: string }) {
     }
   };
 
+  const handleRemoveDevice = async (device: Device) => {
+    if (!currentUser) return;
+    const confirmed = window.confirm(
+      `Hapus "${device.deviceName}" dari daftar device? Device ini bakal hilang dari list, tapi kalau dia masih nyala dan online, bisa muncul lagi otomatis.`,
+    );
+    if (!confirmed) return;
+
+    try {
+      await orbitModel.removeDevice(currentUser.uid, device.id);
+      if (selectedDevice?.id === device.id) {
+        setSelectedDevice(null);
+      }
+    } catch (error) {
+      console.error("Gagal menghapus device:", error);
+      alert("Gagal menghapus device, coba lagi.");
+    }
+  };
+
   const handleFileChange = async (
     event: React.ChangeEvent<HTMLInputElement>,
   ) => {
@@ -177,36 +196,47 @@ export default function HomePage({ userId }: { userId: string }) {
               </>
             ) : (
               devices.map((device) => (
-                <li
-                  key={device.id}
-                  onClick={() => setSelectedDevice(device)}
-                  className={`flex gap-4 items-center transition-all p-3 rounded-2xl cursor-pointer ${
-                    selectedDevice?.id === device.id
-                      ? "bg-sky-500/30 dark:bg-sky-800/60 border border-sky-400"
-                      : "bg-sky-500/10 hover:bg-sky-500/20"
-                  }`}>
-                  <Avatar className="w-10 h-10">
-                    <AvatarFallback>
-                      {device.deviceName.substring(0, 2).toUpperCase()}
-                    </AvatarFallback>
-                    <AvatarBadge
-                      className={
-                        device.status === "online"
-                          ? "bg-green-400"
-                          : "bg-gray-500"
-                      }
-                    />
-                  </Avatar>
-                  <div>
-                    <h4 className="font-semibold text-sm">
-                      {device.deviceName}
-                    </h4>
-                    <span
-                      className={`text-xs ${device.status === "online" ? "text-green-500" : "text-gray-400"}`}>
-                      {device.status}
-                    </span>
-                  </div>
-                </li>
+                <ContextMenu key={device.id}>
+                  <ContextMenuTrigger asChild>
+                    <li
+                      onClick={() => setSelectedDevice(device)}
+                      className={`flex gap-4 items-center transition-all p-3 rounded-2xl cursor-pointer ${
+                        selectedDevice?.id === device.id
+                          ? "bg-sky-500/30 dark:bg-sky-800/60 border border-sky-400"
+                          : "bg-sky-500/10 hover:bg-sky-500/20"
+                      }`}>
+                      <Avatar className="w-10 h-10">
+                        <AvatarFallback>
+                          {device.deviceName.substring(0, 2).toUpperCase()}
+                        </AvatarFallback>
+                        <AvatarBadge
+                          className={
+                            device.status === "online"
+                              ? "bg-green-400"
+                              : "bg-gray-500"
+                          }
+                        />
+                      </Avatar>
+                      <div>
+                        <h4 className="font-semibold text-sm">
+                          {device.deviceName}
+                        </h4>
+                        <span
+                          className={`text-xs ${device.status === "online" ? "text-green-500" : "text-gray-400"}`}>
+                          {device.status}
+                        </span>
+                      </div>
+                    </li>
+                  </ContextMenuTrigger>
+                  <ContextMenuContent>
+                    <ContextMenuItem
+                      variant="destructive"
+                      onClick={() => handleRemoveDevice(device)}>
+                      <Trash2 />
+                      Unsync device
+                    </ContextMenuItem>
+                  </ContextMenuContent>
+                </ContextMenu>
               ))
             )}
           </ul>

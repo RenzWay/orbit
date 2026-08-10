@@ -29,7 +29,9 @@ function createWindow() {
     },
   });
 
-  win.webContents.openDevTools();
+  if(process.env.VITE_DEV_SERVER_URL){
+    win.webContents.openDevTools();
+  }
 
   win.webContents.on("did-finish-load", () => {
     if (pendingDeepLink) {
