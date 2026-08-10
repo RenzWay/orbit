@@ -52,6 +52,14 @@
       },
       "oauth_client": [
         {
+          "client_id": "980332186200-0197q5oon2d2734n0mvkhve9avlo3v47.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.renz.orbit",
+            "certificate_hash": "92ad2629b137ea0390d4c21f801fdd84b4755eb9"
+          }
+        },
+        {
           "client_id": "980332186200-1kon3qpbo76m9r0s70gu6qcmeo2libtn.apps.googleusercontent.com",
           "client_type": 3
         }

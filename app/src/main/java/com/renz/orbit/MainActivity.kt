@@ -79,6 +79,10 @@ class MainActivity : ComponentActivity() {
                 var currentOutputStream by remember { mutableStateOf<OutputStream?>(null) }
 
                 DisposableEffect(Unit) {
+                    val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
+                        currentUser = firebaseAuth.currentUser
+                    }
+                    FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
                     onDispose {
                         webRtcManager.close()
                     }
@@ -131,6 +135,24 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
+                val googleSignInLauncher =
+                    rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) { result ->
+                        scope.launch {
+                            try {
+                                authManager.firebaseAuthWithGoogleSignInResult(result.data)
+                                Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT)
+                                    .show()
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Login Google gagal: ${e.message}")
+                                Toast.makeText(
+                                    context,
+                                    "Login gagal: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
 
                 LaunchedEffect(Unit) {
                     webRtcManager.onConnectionStateChanged = { connected: Boolean ->
@@ -258,7 +280,9 @@ class MainActivity : ComponentActivity() {
                 if (currentUser == null) {
                     LoginPage(
                         onLoginClick = {
-                            authManager.openLoginCustomTab()
+                            googleSignInLauncher.launch(
+                                authManager.getGoogleSignInClient().signInIntent
+                            )
                         }
                     )
                 } else {
@@ -277,6 +301,12 @@ class MainActivity : ComponentActivity() {
                                 clipboardText = clipData.getItemAt(0).text?.toString() ?: ""
                             }
                             showClipboardModal = true
+                        },
+                        onUnsyncDevice = { device ->
+                            orbitPresence.removeDevice(device.id)
+                            if (connectedToDeviceId == device.id) {
+                                connectedToDeviceId = null
+                            }
                         },
                         modifier = Modifier
                     )
@@ -315,7 +345,7 @@ class MainActivity : ComponentActivity() {
                 uri = uri,
                 onSucess = {
                     Toast.makeText(this, "Login Berhasil!", Toast.LENGTH_SHORT).show()
-                    recreate()
+                    //recreate()
                 },
                 onError = { e ->
                     Toast.makeText(this, "Login Gagal: ${e.message}", Toast.LENGTH_LONG).show()

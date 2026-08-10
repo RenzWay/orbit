@@ -43,6 +43,7 @@ fun HomeScreen(
     isOrbitActive: Boolean = true,
     onSendFile: () -> Unit = {},
     onSyncClipboard: () -> Unit = {},
+    onUnsyncDevice: (Device) -> Unit = {},
     modifier: Modifier
 ) {
 //    var isOrbitActive by remember { mutableStateOf(true) }
@@ -87,7 +88,13 @@ fun HomeScreen(
                             deviceName = device.deviceName,
                             status = device.status,
                             isSelected = selectedDevice?.id == device.id,
-                            onClick = { selectedDevice = device })
+                            onClick = { selectedDevice = device },
+                            onUnsync = {
+                                if(selectedDevice?.id == device.id){
+                                    selectedDevice = null
+                                }
+                                onUnsyncDevice(device)
+                            })
                     }
                 }
             }

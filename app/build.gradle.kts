@@ -15,7 +15,7 @@ android {
         minSdk = 24
         targetSdk = 37
         versionCode = 1
-        versionName = "1.1.2-alpha"
+        versionName = "1.2.0-alpha"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -40,16 +40,23 @@ dependencies {
     implementation(libs.androidx.navigation.compose)
     implementation(libs.androidx.compose.material.icons.extended)
 
-    implementation(platform("com.google.firebase:firebase-bom:34.17.0"))
-    implementation("com.google.firebase:firebase-auth")
-    implementation("com.google.firebase:firebase-database")
-    implementation("com.google.firebase:firebase-analytics")
+    implementation(platform(libs.firebase.bom))
+    implementation(libs.firebase.auth)
+    implementation(libs.firebase.database)
+    implementation(libs.firebase.analytics)
 
     // 2. Chrome Custom Tabs (PENTING buat Login via Chrome)
-    implementation("androidx.browser:browser:1.10.0")
+    implementation(libs.androidx.browser)
 
     // 3. WebRTC Official Google untuk Android
-    implementation("io.getstream:stream-webrtc-android:1.3.10") // Wrapper WebRTC terstabil
+    implementation(libs.getstream.webrtc.android)
+
+    implementation(libs.play.services.auth)
+    implementation(libs.androidx.credentials)
+    implementation(libs.androidx.credentials.play.services.auth)
+    implementation(libs.googleid)
+
+    implementation(libs.kotlinx.coroutines.play.services)
 
     // 4. Jetpack Compose UI & Coroutines
     implementation(libs.androidx.activity.compose.v190)

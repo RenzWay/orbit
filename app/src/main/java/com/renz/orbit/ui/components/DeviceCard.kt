@@ -1,8 +1,9 @@
 package com.renz.orbit.ui.components
 
+import androidx.compose.foundation.ExperimentalFoundationApi
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
-import androidx.compose.foundation.clickable
+import androidx.compose.foundation.combinedClickable
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
@@ -16,10 +17,17 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhoneAndroid
+import androidx.compose.material3.DropdownMenu
+import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -30,14 +38,17 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.renz.orbit.ui.theme.OrbitTheme
 
+@OptIn(ExperimentalFoundationApi::class)
 @Composable
 fun DeviceCard(
     deviceName: String,
     status: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    onUnsync: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
+    var showMenu by remember { mutableStateOf(false) }
     val isOnline = status.lowercase() == "online"
     val cardBg = if (isSelected) Color(0xFF1E293B) else Color(0xFF161B26)
     val borderColor = if (isSelected) Color(0xFF05DF72) else Color.Transparent
@@ -51,7 +62,10 @@ fun DeviceCard(
                 if (isSelected) Modifier.border(1.dp, borderColor, RoundedCornerShape(16.dp))
                 else Modifier
             )
-            .clickable { onClick() }
+            .combinedClickable(
+                onClick = { onClick() },
+                onLongClick = { showMenu = true }
+            )
             .padding(16.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
@@ -95,6 +109,22 @@ fun DeviceCard(
                 contentDescription = null,
                 tint = Color(0xFF05DF72),
                 modifier = Modifier.size(20.dp)
+            )
+        }
+        DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
+            DropdownMenuItem(
+                text = { Text("Unsync device", color = Color(0xFFEF4444)) },
+                leadingIcon = {
+                    Icon(
+                        imageVector = Icons.Default.Delete,
+                        contentDescription = null,
+                        tint = Color(0xFFEF4444)
+                    )
+                },
+                onClick = {
+                    showMenu = false
+                    onUnsync()
+                }
             )
         }
     }

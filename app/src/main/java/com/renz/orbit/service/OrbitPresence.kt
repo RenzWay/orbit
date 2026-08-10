@@ -1,12 +1,12 @@
 package com.renz.orbit.service
 
 import android.content.Context
-import com.google.firebase.auth.FirebaseAuth
-import com.google.firebase.database.FirebaseDatabase
 import android.provider.Settings
 import android.util.Log
+import com.google.firebase.auth.FirebaseAuth
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ServerValue
 import com.google.firebase.database.ValueEventListener
 
@@ -67,6 +67,17 @@ class OrbitPresence(private val context: Context) {
         })
     }
 
+    /**
+     * "Unsync" device: hapus node-nya dari presence list.
+     * Sama kayak versi PC: kalau device yang dihapus masih nyala & masih
+     * connect, dia bisa nulis dirinya sendiri online lagi lewat
+     * setDeviceOnline/onDisconnect yang lagi jalan di device itu sendiri.
+     */
+    fun removeDevice(targetDeviceId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        db.getReference("presence/$uid/$targetDeviceId").removeValue()
+    }
+
     fun listenToOtherDevices(onDevicesUpdated: (List<Device>) -> Unit) {
         val uid = auth.currentUser?.uid ?: return
         val presenceRef = db.getReference("presence/$uid")
@@ -76,7 +87,7 @@ class OrbitPresence(private val context: Context) {
                 val deviceList = mutableListOf<Device>()
                 for (child in snapshot.children) {
                     val id = child.key ?: continue
-                    if (id != deviceId) { // Exclude device sendiri
+                    if (id != deviceId) {
                         val name =
                             child.child("deviceName").getValue(String::class.java) ?: "Unknown"
                         val platform =
