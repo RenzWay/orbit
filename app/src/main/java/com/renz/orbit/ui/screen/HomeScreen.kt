@@ -41,12 +41,11 @@ import com.renz.orbit.ui.theme.OrbitTheme
 fun HomeScreen(
     devices: List<Device> = emptyList(),
     isOrbitActive: Boolean = true,
-    onSendFile: () -> Unit = {},
-    onSyncClipboard: () -> Unit = {},
+    onSendFile: (Device) -> Unit = {},
+    onSyncClipboard: (Device) -> Unit = {},
     onUnsyncDevice: (Device) -> Unit = {},
     modifier: Modifier
 ) {
-//    var isOrbitActive by remember { mutableStateOf(true) }
     var selectedDevice by remember { mutableStateOf<Device?>(null) }
     Scaffold(
         modifier = Modifier.fillMaxSize(),
@@ -100,8 +99,12 @@ fun HomeScreen(
             }
 
             QuickActions(
-                onSendFileClick = onSendFile,
-                onSyncClipboardClick = onSyncClipboard,
+                onSendFileClick = {
+                    selectedDevice?.let { onSendFile(it) }
+                },
+                onSyncClipboardClick = {
+                    selectedDevice?.let { onSyncClipboard(it) }
+                },
                 modifier = Modifier.padding(bottom = 24.dp)
             )
 

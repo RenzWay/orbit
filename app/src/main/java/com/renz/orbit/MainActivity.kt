@@ -3,6 +3,7 @@ package com.renz.orbit
 import android.content.ClipData
 import android.content.ClipboardManager
 import android.content.ContentValues
+import android.content.Context
 import android.content.Intent
 import android.net.Uri
 import android.os.Build
@@ -15,8 +16,16 @@ import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.clickable
+import androidx.compose.foundation.layout.Column
+import androidx.compose.foundation.layout.fillMaxWidth
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Surface
+import androidx.compose.material3.Text
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -24,11 +33,12 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.unit.dp
 import com.google.firebase.auth.FirebaseAuth
 import com.renz.orbit.service.AuthManager
 import com.renz.orbit.service.Device
-import com.renz.orbit.service.OrbitPresence
-import com.renz.orbit.service.WebRtcManager
+import com.renz.orbit.service.OrbitConnectionService
+import com.renz.orbit.service.OrbitRuntime
 import com.renz.orbit.ui.components.ClipboardModal
 import com.renz.orbit.ui.screen.HomeScreen
 import com.renz.orbit.ui.screen.LoginPage
@@ -41,24 +51,41 @@ import java.io.OutputStream
 
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
-    private lateinit var orbitPresence: OrbitPresence
+    private var pendingShareUrisState: ((List<Uri>) -> Unit)? = null
 
-    private fun getRealDeviceName(): String {
-        val manufacturer = Build.MANUFACTURER
-        val model = Build.MODEL
+    private fun extractShareUris(intent: Intent?): List<Uri> {
+        if (intent == null) return emptyList()
+        return when (intent.action) {
+            Intent.ACTION_SEND -> {
+                val uri = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableExtra(Intent.EXTRA_STREAM) as? Uri
+                }
+                if (uri != null) listOf(uri) else emptyList()
+            }
 
-        return if (model.lowercase().startsWith(manufacturer.lowercase())) {
-            model.replaceFirstChar { it.uppercase() }
-        } else {
-            "${manufacturer.replaceFirstChar { it.uppercase() }} $model"
+            Intent.ACTION_SEND_MULTIPLE -> {
+                val uris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                    intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
+                } else {
+                    @Suppress("DEPRECATION")
+                    intent.getParcelableArrayListExtra<Uri>(Intent.EXTRA_STREAM)
+                }
+                uris ?: emptyList()
+            }
+
+            else -> emptyList()
         }
     }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+        OrbitRuntime.init(this)
         authManager = AuthManager(this)
-        orbitPresence = OrbitPresence(this)
 
+        val initialShareUris = extractShareUris(intent)
         handleIntent(intent)
 
         setContent {
@@ -66,17 +93,20 @@ class MainActivity : ComponentActivity() {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
                 var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
-                var otherDevices by remember { mutableStateOf<List<Device>>(emptyList()) }
+
+                val otherDevices by OrbitRuntime.devices.collectAsState()
 
                 var showClipboardModal by remember { mutableStateOf(false) }
                 var clipboardText by remember { mutableStateOf("") }
-
-                val webRtcManager = remember { WebRtcManager(context) }
-                var isConnectedToPeer by remember { mutableStateOf(false) }
-                var connectedToDeviceId by remember { mutableStateOf<String?>(null) }
+                var clipboardTargetDevice by remember { mutableStateOf<Device?>(null) }
 
                 var currentDownloadName by remember { mutableStateOf<String?>(null) }
                 var currentOutputStream by remember { mutableStateOf<OutputStream?>(null) }
+
+                var pendingSendTarget by remember { mutableStateOf<Device?>(null) }
+
+                var pendingShareUris by remember { mutableStateOf(initialShareUris) }
+                pendingShareUrisState = { uris -> pendingShareUris = uris }
 
                 DisposableEffect(Unit) {
                     val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
@@ -84,82 +114,18 @@ class MainActivity : ComponentActivity() {
                     }
                     FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
                     onDispose {
-                        webRtcManager.close()
+                        FirebaseAuth.getInstance().removeAuthStateListener(authStateListener)
                     }
                 }
 
-                val filePickerLauncher = rememberLauncherForActivityResult(
-                    contract = ActivityResultContracts.GetContent()
-                ) { uri: Uri? ->
-                    uri?.let {
-                        scope.launch {
-                            try {
-                                val cursor =
-                                    context.contentResolver.query(it, null, null, null, null)
-                                val nameIndex =
-                                    cursor?.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
-                                cursor?.moveToFirst()
-                                val fileName = nameIndex?.let { i -> cursor.getString(i) }
-                                    ?: "file_${System.currentTimeMillis()}"
-                                cursor?.close()
-
-                                val meta = JSONObject().apply {
-                                    put("type", "file-meta")
-                                    put("name", fileName)
-                                }
-                                webRtcManager.sendData(meta.toString())
-
-                                context.contentResolver.openInputStream(it)?.use { inputStream ->
-                                    val buffer = ByteArray(16384)
-                                    var bytesRead: Int
-                                    while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                                        val chunk =
-                                            if (bytesRead == buffer.size) buffer else buffer.copyOf(
-                                                bytesRead
-                                            )
-                                        webRtcManager.sendBinary(chunk)
-                                    }
-                                }
-
-                                val complete = JSONObject().apply { put("type", "file-complete") }
-                                webRtcManager.sendData(complete.toString())
-
-                                Toast.makeText(
-                                    context,
-                                    "File '$fileName' terkirim!",
-                                    Toast.LENGTH_SHORT
-                                ).show()
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Gagal kirim file: ${e.message}")
-                            }
-                        }
+                LaunchedEffect(currentUser) {
+                    if (currentUser != null) {
+                        OrbitConnectionService.start(context)
                     }
                 }
-
-                val googleSignInLauncher =
-                    rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) { result ->
-                        scope.launch {
-                            try {
-                                authManager.firebaseAuthWithGoogleSignInResult(result.data)
-                                Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT)
-                                    .show()
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Login Google gagal: ${e.message}")
-                                Toast.makeText(
-                                    context,
-                                    "Login gagal: ${e.message}",
-                                    Toast.LENGTH_LONG
-                                ).show()
-                            }
-                        }
-                    }
 
                 LaunchedEffect(Unit) {
-                    webRtcManager.onConnectionStateChanged = { connected: Boolean ->
-                        scope.launch {
-                            isConnectedToPeer = connected
-                        }
-                    }
+                    val webRtcManager = OrbitRuntime.webRtcManager
 
                     webRtcManager.onDataReceived = { textData: String ->
                         scope.launch {
@@ -170,7 +136,8 @@ class MainActivity : ComponentActivity() {
                                         val payload = json.getString("payload")
                                         val clipboard =
                                             getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("Orbit clipboard", payload)
+                                        val clip =
+                                            ClipData.newPlainText("Orbit clipboard", payload)
                                         clipboard.setPrimaryClip(clip)
                                         Toast.makeText(
                                             context,
@@ -233,6 +200,8 @@ class MainActivity : ComponentActivity() {
                                             Toast.LENGTH_SHORT
                                         ).show()
                                         currentDownloadName = null
+                                        webRtcManager.closeConnection()
+                                        OrbitRuntime.setActiveConnection(null)
                                     }
                                 }
                             } catch (e: Exception) {
@@ -253,26 +222,104 @@ class MainActivity : ComponentActivity() {
                     }
                 }
 
-                LaunchedEffect(currentUser) {
-                    if (currentUser != null) {
-                        orbitPresence.setDeviceOnline(getRealDeviceName())
-                        orbitPresence.listenToOtherDevices { devices ->
-                            otherDevices = devices
+                val filePickerLauncher = rememberLauncherForActivityResult(
+                    contract = ActivityResultContracts.GetContent()
+                ) { uri: Uri? ->
+                    val targetDevice = pendingSendTarget
+                    if (uri == null || targetDevice == null) return@rememberLauncherForActivityResult
 
-                            val pcDevice = devices.firstOrNull { it.status.lowercase() == "online" }
-                            if (pcDevice != null && pcDevice.id != connectedToDeviceId) {
-                                connectedToDeviceId = pcDevice.id
+                    scope.launch {
+                        val webRtcManager = OrbitRuntime.webRtcManager
+                        try {
+                            // ON-DEMAND: cuma bikin koneksi baru kalau emang
+                            // belum ada koneksi yang OPEN ke device ini.
+                            // Kalau device ini yang barusan connect ke kita
+                            // duluan (lewat listenForIncomingCalls di
+                            // Service), koneksinya udah OPEN -> langsung
+                            // kirim tanpa nego ulang.
+                            if (!webRtcManager.isDataChannelOpen()) {
+                                Toast.makeText(context, "Menyambungkan...", Toast.LENGTH_SHORT)
+                                    .show()
+                                OrbitRuntime.setActiveConnection(targetDevice.id)
                                 webRtcManager.createPeerConnection(
-                                    targetDeviceId = pcDevice.id,
-                                    myDeviceId = orbitPresence.deviceId,
-                                    isInitiator = false
+                                    targetDeviceId = targetDevice.id,
+                                    myDeviceId = OrbitRuntime.orbitPresence.deviceId,
+                                    isInitiator = true
                                 )
-                            } else if (pcDevice == null) {
-                                connectedToDeviceId = null
+                                val connected = webRtcManager.awaitDataChannelOpen()
+                                if (!connected) {
+                                    Toast.makeText(
+                                        context,
+                                        "Gagal konek ke ${targetDevice.deviceName}",
+                                        Toast.LENGTH_LONG
+                                    ).show()
+                                    return@launch
+                                }
                             }
+
+                            val cursor =
+                                context.contentResolver.query(uri, null, null, null, null)
+                            val nameIndex =
+                                cursor?.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+                            cursor?.moveToFirst()
+                            val fileName = nameIndex?.let { i -> cursor.getString(i) }
+                                ?: "file_${System.currentTimeMillis()}"
+                            cursor?.close()
+
+                            val meta = JSONObject().apply {
+                                put("type", "file-meta")
+                                put("name", fileName)
+                            }
+                            webRtcManager.sendData(meta.toString())
+
+                            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                                val buffer = ByteArray(16384)
+                                var bytesRead: Int
+                                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                                    val chunk =
+                                        if (bytesRead == buffer.size) buffer else buffer.copyOf(
+                                            bytesRead
+                                        )
+                                    webRtcManager.sendBinary(chunk)
+                                }
+                            }
+
+                            val complete = JSONObject().apply { put("type", "file-complete") }
+                            webRtcManager.sendData(complete.toString())
+
+                            Toast.makeText(
+                                context,
+                                "File '$fileName' terkirim!",
+                                Toast.LENGTH_SHORT
+                            ).show()
+
+                            webRtcManager.closeConnection()
+                            OrbitRuntime.setActiveConnection(null)
+                        } catch (e: Exception) {
+                            Log.e("MainActivity", "Gagal kirim file: ${e.message}")
+                            webRtcManager.closeConnection()
+                            OrbitRuntime.setActiveConnection(null)
                         }
                     }
                 }
+
+                val googleSignInLauncher =
+                    rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) { result ->
+                        scope.launch {
+                            try {
+                                authManager.firebaseAuthWithGoogleSignInResult(result.data)
+                                Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT)
+                                    .show()
+                            } catch (e: Exception) {
+                                Log.e("MainActivity", "Login Google gagal: ${e.message}")
+                                Toast.makeText(
+                                    context,
+                                    "Login gagal: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
+                            }
+                        }
+                    }
 
                 val isOrbitActive =
                     otherDevices.any { device -> device.status.lowercase() == "online" }
@@ -286,14 +333,15 @@ class MainActivity : ComponentActivity() {
                         }
                     )
                 } else {
-
                     HomeScreen(
                         devices = otherDevices,
                         isOrbitActive = isOrbitActive,
-                        onSendFile = {
+                        onSendFile = { device ->
+                            pendingSendTarget = device
                             filePickerLauncher.launch("*/*")
                         },
-                        onSyncClipboard = {
+                        onSyncClipboard = { device ->
+                            clipboardTargetDevice = device
                             val clipboard =
                                 getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                             val clipData = clipboard.primaryClip
@@ -303,9 +351,10 @@ class MainActivity : ComponentActivity() {
                             showClipboardModal = true
                         },
                         onUnsyncDevice = { device ->
-                            orbitPresence.removeDevice(device.id)
-                            if (connectedToDeviceId == device.id) {
-                                connectedToDeviceId = null
+                            OrbitRuntime.orbitPresence.removeDevice(device.id)
+                            if (OrbitRuntime.activeConnectionDeviceId.value == device.id) {
+                                OrbitRuntime.webRtcManager.closeConnection()
+                                OrbitRuntime.setActiveConnection(null)
                             }
                         },
                         modifier = Modifier
@@ -316,23 +365,65 @@ class MainActivity : ComponentActivity() {
                             clipboardText = clipboardText,
                             onTextChange = { clipboardText = it },
                             onSend = {
-                                if (clipboardText.isNotEmpty()) {
-                                    webRtcManager.sendClipboard(clipboardText)
-                                    Toast.makeText(
-                                        context,
-                                        "Clipboard terkirim ke PC!",
-                                        Toast.LENGTH_SHORT
-                                    ).show()
-                                }
+                                val targetDevice = clipboardTargetDevice
                                 showClipboardModal = false
+                                if (clipboardText.isNotEmpty() && targetDevice != null) {
+                                    scope.launch {
+                                        sendClipboardToDevice(context, targetDevice, clipboardText)
+                                    }
+                                }
                             },
                             onDismiss = { showClipboardModal = false }
                         )
                     }
+
+                    if (pendingShareUris.isNotEmpty()) {
+                        val onlineDevices =
+                            otherDevices.filter { it.status.lowercase() == "online" }
+
+                        AlertDialog(
+                            onDismissRequest = { pendingShareUris = emptyList() },
+                            title = { Text("Upload to device?") },
+                            text = {
+                                Column {
+                                    if (onlineDevices.isEmpty()) {
+                                        Text("Ga ada device yang online sekarang. Buka Orbit di device tujuan dulu.")
+                                    } else {
+                                        onlineDevices.forEach { device ->
+                                            Surface(
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        val uris = pendingShareUris
+                                                        pendingShareUris = emptyList()
+                                                        scope.launch {
+                                                            sendFilesToDevice(context, device, uris)
+                                                        }
+                                                    }
+                                                    .padding(vertical = 12.dp)
+                                            ) {
+                                                Text(device.deviceName)
+                                            }
+                                        }
+                                    }
+                                }
+                            },
+                            confirmButton = {},
+                            dismissButton = {
+                                Surface(
+                                    modifier = Modifier.clickable {
+                                        pendingShareUris = emptyList()
+                                    }
+                                ) { Text("Batal", modifier = Modifier.padding(8.dp)) }
+                            }
+                        )
+                    }
+
                 }
             }
         }
     }
+
 
     override fun onNewIntent(intent: Intent) {
         super.onNewIntent(intent)
@@ -340,17 +431,123 @@ class MainActivity : ComponentActivity() {
     }
 
     private fun handleIntent(intent: Intent?) {
-        intent?.data?.let { uri ->
+        if (intent == null) return
+
+        val shareUris = extractShareUris(intent)
+        if (shareUris.isNotEmpty()) {
+            pendingShareUrisState?.invoke(shareUris)
+            return
+        }
+
+        intent.data?.let { uri ->
             authManager.handleDeepLinkIntent(
                 uri = uri,
                 onSucess = {
                     Toast.makeText(this, "Login Berhasil!", Toast.LENGTH_SHORT).show()
-                    //recreate()
                 },
                 onError = { e ->
                     Toast.makeText(this, "Login Gagal: ${e.message}", Toast.LENGTH_LONG).show()
                 },
             )
         }
+    }
+}
+
+private suspend fun sendFilesToDevice(context: Context, targetDevice: Device, uris: List<Uri>) {
+    val webRtcManager = OrbitRuntime.webRtcManager
+    try {
+        if (!webRtcManager.isDataChannelOpen()) {
+            Toast.makeText(
+                context,
+                "Menyambungkan ke ${targetDevice.deviceName}...",
+                Toast.LENGTH_SHORT
+            )
+                .show()
+            OrbitRuntime.setActiveConnection(targetDevice.id)
+            webRtcManager.createPeerConnection(
+                targetDeviceId = targetDevice.id,
+                myDeviceId = OrbitRuntime.orbitPresence.deviceId,
+                isInitiator = true
+            )
+            val connected = webRtcManager.awaitDataChannelOpen()
+            if (!connected) {
+                Toast.makeText(
+                    context,
+                    "Gagal konek ke ${targetDevice.deviceName}",
+                    Toast.LENGTH_LONG
+                ).show()
+                OrbitRuntime.setActiveConnection(null)
+                return
+            }
+        }
+
+        for (uri in uris) {
+            val cursor = context.contentResolver.query(uri, null, null, null, null)
+            val nameIndex = cursor?.getColumnIndex(MediaStore.MediaColumns.DISPLAY_NAME)
+            cursor?.moveToFirst()
+            val fileName = nameIndex?.let { i -> cursor.getString(i) }
+                ?: "file_${System.currentTimeMillis()}"
+            cursor?.close()
+
+            val meta = JSONObject().apply {
+                put("type", "file-meta")
+                put("name", fileName)
+            }
+            webRtcManager.sendData(meta.toString())
+
+            context.contentResolver.openInputStream(uri)?.use { inputStream ->
+                val buffer = ByteArray(16384)
+                var bytesRead: Int
+                while (inputStream.read(buffer).also { bytesRead = it } != -1) {
+                    val chunk =
+                        if (bytesRead == buffer.size) buffer else buffer.copyOf(bytesRead)
+                    webRtcManager.sendBinary(chunk)
+                }
+            }
+
+            val complete = JSONObject().apply { put("type", "file-complete") }
+            webRtcManager.sendData(complete.toString())
+
+            Toast.makeText(context, "'$fileName' terkirim!", Toast.LENGTH_SHORT).show()
+        }
+
+        webRtcManager.closeConnection()
+        OrbitRuntime.setActiveConnection(null)
+    } catch (e: Exception) {
+        Log.e("MainActivity", "Gagal kirim file: ${e.message}")
+        webRtcManager.closeConnection()
+        OrbitRuntime.setActiveConnection(null)
+    }
+}
+
+private suspend fun sendClipboardToDevice(context: Context, targetDevice: Device, text: String) {
+    val webRtcManager = OrbitRuntime.webRtcManager
+    try {
+        if (!webRtcManager.isDataChannelOpen()) {
+            OrbitRuntime.setActiveConnection(targetDevice.id)
+            webRtcManager.createPeerConnection(
+                targetDeviceId = targetDevice.id,
+                myDeviceId = OrbitRuntime.orbitPresence.deviceId,
+                isInitiator = true
+            )
+            val connected = webRtcManager.awaitDataChannelOpen()
+            if (!connected) {
+                Toast.makeText(
+                    context,
+                    "Gagal konek ke ${targetDevice.deviceName}",
+                    Toast.LENGTH_LONG
+                ).show()
+                OrbitRuntime.setActiveConnection(null)
+                return
+            }
+        }
+        webRtcManager.sendClipboard(text)
+        Toast.makeText(context, "Clipboard terkirim!", Toast.LENGTH_SHORT).show()
+        webRtcManager.closeConnection()
+        OrbitRuntime.setActiveConnection(null)
+    } catch (e: Exception) {
+        Log.e("MainActivity", "Gagal kirim clipboard: ${e.message}")
+        webRtcManager.closeConnection()
+        OrbitRuntime.setActiveConnection(null)
     }
 }

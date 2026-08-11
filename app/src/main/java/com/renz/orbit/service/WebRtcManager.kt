@@ -5,11 +5,12 @@ import android.net.wifi.WifiManager
 import android.os.PowerManager
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
+import com.google.firebase.database.ChildEventListener
 import com.google.firebase.database.DataSnapshot
 import com.google.firebase.database.DatabaseError
+import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
-import java.nio.ByteBuffer
 import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
@@ -20,6 +21,8 @@ import org.webrtc.PeerConnectionFactory
 import org.webrtc.RtpReceiver
 import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
+import java.nio.ByteBuffer
+import kotlin.time.Duration.Companion.milliseconds
 
 class WebRtcManager(private val context: Context) {
     private val db =
@@ -61,6 +64,76 @@ class WebRtcManager(private val context: Context) {
         peerConnectionFactory = PeerConnectionFactory.builder()
             .createPeerConnectionFactory()
     }
+
+    private var pendingOfferJob: ChildEventListener? = null
+    private var incomingCallsRef: DatabaseReference? = null
+    private val handleCallsId = mutableSetOf<String>()
+
+    fun listenForIncomingCalls(myDeviceId: String, onIncomingCall: (fromDeviceId: String) -> Unit) {
+        val uid = auth.currentUser?.uid ?: return
+        incomingCallsRef?.let {}
+
+        val ref = db.getReference("calls/$uid")
+        incomingCallsRef = ref
+
+        ref.addChildEventListener(object : ChildEventListener {
+            private fun checkAndTrigger(snapshot: DataSnapshot) {
+                val callId = snapshot.key ?: return
+                val suffix = "_to_$myDeviceId"
+                if (!callId.endsWith(suffix)) return
+
+                val hasOffer = snapshot.child("offer").exists()
+                if (!hasOffer) return
+
+                if (handleCallsId.contains(callId)) return
+                handleCallsId.add(callId)
+
+                val fromDeviceId = callId.removeSuffix(suffix)
+                Log.d(TAG, "Ada offer masuk dari: $fromDeviceId")
+                onIncomingCall(fromDeviceId)
+            }
+
+            override fun onChildAdded(snapshot: DataSnapshot, previousChildName: String?) =
+                checkAndTrigger(snapshot)
+
+            override fun onChildChanged(
+                snapshot: DataSnapshot,
+                previousChildName: String?
+            ) = checkAndTrigger(snapshot)
+
+            override fun onChildRemoved(snapshot: DataSnapshot) {
+                snapshot.key?.let { handleCallsId.remove(it) }
+            }
+
+            override fun onChildMoved(
+                snapshot: DataSnapshot,
+                previousChildName: String?
+            ) {
+            }
+
+            override fun onCancelled(error: DatabaseError) {}
+
+
+        })
+    }
+
+    fun resetHandleCalls() {
+        handleCallsId.clear()
+    }
+
+    fun isDataChannelOpen(): Boolean = dataChannel?.state() == DataChannel.State.OPEN
+
+    suspend fun awaitDataChannelOpen(timeoutMs: Long = 15_000): Boolean {
+        val start = System.currentTimeMillis()
+
+        while (!isDataChannelOpen()) {
+            if (System.currentTimeMillis() - start > timeoutMs) return false
+            kotlinx.coroutines.delay(150.milliseconds)
+        }
+
+        return true
+    }
+
 
     // 1. Inisialisasi PeerConnection & ICE Server (Google STUN)
     fun createPeerConnection(targetDeviceId: String, myDeviceId: String, isInitiator: Boolean) {
@@ -247,7 +320,10 @@ class WebRtcManager(private val context: Context) {
 
                 if (sdpStr == processedRemoteSdp) return
                 if (peerConnection?.signalingState() != PeerConnection.SignalingState.STABLE) {
-                    Log.w(TAG, "Abaikan Offer: Signaling state sedang ${peerConnection?.signalingState()}")
+                    Log.w(
+                        TAG,
+                        "Abaikan Offer: Signaling state sedang ${peerConnection?.signalingState()}"
+                    )
                     return
                 }
 
@@ -340,6 +416,37 @@ class WebRtcManager(private val context: Context) {
             return dataChannel?.send(DataChannel.Buffer(buffer, true)) ?: false
         }
         return false
+    }
+
+    fun closeConnection() {
+        try {
+            if (wifiLock.isHeld) wifiLock.release()
+            if (wakeLock.isHeld) wakeLock.release()
+            addedIceCandidates.clear()
+            processedRemoteSdp = null
+            pendingIceCandidates.clear()
+            dataChannel?.close()
+            dataChannel?.dispose()
+            peerConnection?.close()
+            peerConnection?.dispose()
+            dataChannel = null
+            peerConnection = null
+            resetHandleCalls()
+            Log.d(TAG, "Sesi koneksi P2P ditutup (factory tetap hidup).")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error closing connection: ${e.message}")
+
+        }
+    }
+
+    fun shutdown(){
+        try {
+            closeConnection()
+            peerConnectionFactory?.dispose()
+            Log.d(TAG,"WebRtc resource clean up successfully")
+        }catch (e: Exception){
+            Log.e(TAG,"Error during shutdown ${e.message}")
+        }
     }
 
     fun close() {
