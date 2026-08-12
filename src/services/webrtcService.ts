@@ -45,6 +45,22 @@ class WebRTCService {
   private negotiationState: "idle" | "connecting" | "connected" | "failed" =
     "idle";
 
+  // Watchdog untuk ICE "checking" yang tersangkut dan grace period untuk
+  // status "disconnected" yang biasanya hanya gangguan jaringan sesaat.
+  private checkingWatchdogTimer: number | null = null;
+  private disconnectGraceTimer: number | null = null;
+
+  private clearIceWatchdogs() {
+    if (this.checkingWatchdogTimer !== null) {
+      window.clearTimeout(this.checkingWatchdogTimer);
+      this.checkingWatchdogTimer = null;
+    }
+    if (this.disconnectGraceTimer !== null) {
+      window.clearTimeout(this.disconnectGraceTimer);
+      this.disconnectGraceTimer = null;
+    }
+  }
+
   private clearCallSignalListeners() {
     this.callSignalUnsubscribes.forEach((unsubscribe) => unsubscribe());
     this.callSignalUnsubscribes = [];
@@ -123,10 +139,25 @@ class WebRTCService {
     peerConnection.oniceconnectionstatechange = () => {
       const state = peerConnection.iceConnectionState;
       console.log("ICE state:", state);
-      if (this.peerConnection !== peerConnection) return; // koneksi lama, abaikan
+      if (this.peerConnection !== peerConnection) return;
+
+      // Timer state sebelumnya tidak lagi relevan setelah ICE state berubah.
+      this.clearIceWatchdogs();
 
       if (state === "checking") {
         this.negotiationState = "connecting";
+        // ICE dapat berhenti di "checking" tanpa berpindah ke "failed".
+        // Lepaskan state connecting agar auto-reconnect dapat mencoba lagi.
+        this.checkingWatchdogTimer = window.setTimeout(() => {
+          if (this.peerConnection !== peerConnection) return;
+          if (peerConnection.iceConnectionState === "checking") {
+            console.warn(
+              "ICE terlalu lama di 'checking'; koneksi akan dicoba ulang.",
+            );
+            this.negotiationState = "failed";
+            this.onConnectionStateChange?.(false);
+          }
+        }, 12_000);
       } else if (state === "connected" || state === "completed") {
         // SENGAJA TIDAK di-set "connected" di sini. ICE connected cuma
         // berarti jalur network-nya nyambung — datachannel (SCTP) masih
@@ -136,11 +167,17 @@ class WebRTCService {
         // datachannel-nya BELUM open, jadi auto-reconnect bisa nutup
         // koneksi yang hampir jadi ini sebelum sempat kebuka beneran.
         // Biarkan tetap "connecting" sampai channel.onopen beneran fire.
-      } else if (
-        state === "failed" ||
-        state === "disconnected" ||
-        state === "closed"
-      ) {
+      } else if (state === "disconnected") {
+        // Jangan langsung gagal: state ini sering pulih sendiri setelah
+        // gangguan jaringan singkat, sehingga menghindari reconnect flapping.
+        this.disconnectGraceTimer = window.setTimeout(() => {
+          if (this.peerConnection !== peerConnection) return;
+          if (peerConnection.iceConnectionState === "disconnected") {
+            this.negotiationState = "failed";
+            this.onConnectionStateChange?.(false);
+          }
+        }, 4_000);
+      } else if (state === "failed" || state === "closed") {
         this.negotiationState = "failed";
         this.onConnectionStateChange?.(false);
       }
@@ -205,6 +242,7 @@ class WebRTCService {
 
     this.negotiationState = "connecting";
     this.clearCallSignalListeners();
+    this.clearIceWatchdogs();
     this.peerConnection?.close();
     const peerConnection = new RTCPeerConnection(configuration);
     this.peerConnection = peerConnection;
@@ -313,6 +351,7 @@ class WebRTCService {
   ) {
     this.negotiationState = "connecting";
     this.clearCallSignalListeners();
+    this.clearIceWatchdogs();
     this.peerConnection?.close();
     const peerConnection = new RTCPeerConnection(configuration);
     this.peerConnection = peerConnection;
