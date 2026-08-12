@@ -69,6 +69,8 @@ class WebRtcManager(private val context: Context) {
     private var incomingCallsRef: DatabaseReference? = null
     private val handleCallsId = mutableSetOf<String>()
 
+    private val handledOfferSdp = mutableMapOf<String, String>()
+
     fun listenForIncomingCalls(myDeviceId: String, onIncomingCall: (fromDeviceId: String) -> Unit) {
         val uid = auth.currentUser?.uid ?: return
         incomingCallsRef?.let {}
@@ -82,10 +84,11 @@ class WebRtcManager(private val context: Context) {
                 val suffix = "_to_$myDeviceId"
                 if (!callId.endsWith(suffix)) return
 
-                val hasOffer = snapshot.child("offer").exists()
-                if (!hasOffer) return
+                val offerSdp =
+                    snapshot.child("offer").child("sdp").getValue(String::class.java) ?: return
 
-                if (handleCallsId.contains(callId)) return
+                if (handledOfferSdp[callId] == offerSdp) return // offer ini udah diproses
+                handledOfferSdp[callId] = offerSdp
                 handleCallsId.add(callId)
 
                 val fromDeviceId = callId.removeSuffix(suffix)
@@ -119,6 +122,7 @@ class WebRtcManager(private val context: Context) {
 
     fun resetHandleCalls() {
         handleCallsId.clear()
+        handledOfferSdp.clear()
     }
 
     fun isDataChannelOpen(): Boolean = dataChannel?.state() == DataChannel.State.OPEN
@@ -439,13 +443,13 @@ class WebRtcManager(private val context: Context) {
         }
     }
 
-    fun shutdown(){
+    fun shutdown() {
         try {
             closeConnection()
             peerConnectionFactory?.dispose()
-            Log.d(TAG,"WebRtc resource clean up successfully")
-        }catch (e: Exception){
-            Log.e(TAG,"Error during shutdown ${e.message}")
+            Log.d(TAG, "WebRtc resource clean up successfully")
+        } catch (e: Exception) {
+            Log.e(TAG, "Error during shutdown ${e.message}")
         }
     }
 
