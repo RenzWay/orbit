@@ -1,6 +1,8 @@
 import {
   child,
+  DataSnapshot,
   onChildAdded,
+  onChildChanged,
   onValue,
   push,
   ref,
@@ -36,6 +38,13 @@ class WebRTCService {
   public onClipboardReceived?: (text: string) => void;
   public onError?: (message: string) => void;
 
+  public onConnectionStateChange?: (connected: boolean) => void;
+  private handledOffers = new Map<string, string>();
+  private incomingCallUnsubscribes: Array<() => void> = [];
+
+  private negotiationState: "idle" | "connecting" | "connected" | "failed" =
+    "idle";
+
   private clearCallSignalListeners() {
     this.callSignalUnsubscribes.forEach((unsubscribe) => unsubscribe());
     this.callSignalUnsubscribes = [];
@@ -43,16 +52,38 @@ class WebRTCService {
 
   private setupDataChannelHandlers() {
     if (!this.dataChannel) return;
-    this.dataChannel.onopen = () => {
+    const channel = this.dataChannel;
+
+    channel.onopen = () => {
       console.log("✅ WebRTC DataChannel OPEN");
       console.log("DataChannel OPEN");
+      this.negotiationState = "connected";
       this.onConnectionOpen?.();
+      this.onConnectionStateChange?.(true);
     };
-    this.dataChannel.onerror = (e) => {
-      console.error("DataChannel error:", e);
+    channel.onclose = () => {
+      console.log("DataChannel CLOSED");
+      if (this.negotiationState !== "failed") this.negotiationState = "idle";
+      this.onConnectionStateChange?.(false);
+    };
+    channel.onerror = (event) => {
+      const error = event.error;
+      const isExpectedClose =
+        channel.readyState === "closing" ||
+        channel.readyState === "closed" ||
+        (error.name === "OperationError" &&
+          (error.message.includes("User-Initiated Abort") ||
+            error.message.includes("Close called")));
+
+      if (isExpectedClose) {
+        console.info("DataChannel ditutup normal.");
+        return;
+      }
+
+      console.error("DataChannel error:", event);
       this.onError?.("Koneksi P2P terputus atau error.");
     };
-    this.dataChannel.onmessage = async (event) => {
+    channel.onmessage = async (event) => {
       if (typeof event.data === "string") {
         try {
           const parsed = JSON.parse(event.data);
@@ -88,8 +119,47 @@ class WebRTCService {
     };
   }
 
+  private trackIceState(peerConnection: RTCPeerConnection) {
+    peerConnection.oniceconnectionstatechange = () => {
+      const state = peerConnection.iceConnectionState;
+      console.log("ICE state:", state);
+      if (this.peerConnection !== peerConnection) return; // koneksi lama, abaikan
+
+      if (state === "checking") {
+        this.negotiationState = "connecting";
+      } else if (state === "connected" || state === "completed") {
+        // SENGAJA TIDAK di-set "connected" di sini. ICE connected cuma
+        // berarti jalur network-nya nyambung — datachannel (SCTP) masih
+        // proses handshake terpisah setelah ini, butuh waktu tambahan.
+        // Kalau negotiationState di-set "connected" di titik ini,
+        // canAttemptReconnect() bakal nganggep "boleh coba lagi" padahal
+        // datachannel-nya BELUM open, jadi auto-reconnect bisa nutup
+        // koneksi yang hampir jadi ini sebelum sempat kebuka beneran.
+        // Biarkan tetap "connecting" sampai channel.onopen beneran fire.
+      } else if (
+        state === "failed" ||
+        state === "disconnected" ||
+        state === "closed"
+      ) {
+        this.negotiationState = "failed";
+        this.onConnectionStateChange?.(false);
+      }
+    };
+  }
+
   public isConnected(): boolean {
     return this.dataChannel?.readyState === "open";
+  }
+
+  /**
+   * Dipakai UI (misal auto-reconnect interval) buat nanya "boleh ga gue coba
+   * connect ulang sekarang?". Jawabannya TIDAK kalau lagi belum konek TAPI
+   * masih dalam proses checking/connecting — supaya proses itu dikasih
+   * kesempatan selesai dulu, bukan langsung dipotong & diulang dari nol.
+   */
+  public canAttemptReconnect(): boolean {
+    if (this.isConnected()) return false;
+    return this.negotiationState !== "connecting";
   }
 
   public async waitForConnection(timeoutMs = 15_000): Promise<void> {
@@ -123,14 +193,17 @@ class WebRTCService {
     userId: string,
     targetDeviceId: string,
     myDeviceId: string,
+    force = false,
   ) {
     const callId = `${myDeviceId}_to_${targetDeviceId}`;
     const channelIsActive =
       this.dataChannel?.readyState === "connecting" ||
       this.dataChannel?.readyState === "open";
 
-    if (this.activeCallId === callId && channelIsActive) return;
+    if (!force && this.negotiationState === "connecting") return;
+    if (!force && this.activeCallId === callId && channelIsActive) return;
 
+    this.negotiationState = "connecting";
     this.clearCallSignalListeners();
     this.peerConnection?.close();
     const peerConnection = new RTCPeerConnection(configuration);
@@ -144,9 +217,7 @@ class WebRTCService {
         void set(push(child(callRef, "offerCandidates")), candidate.toJSON());
     };
 
-    peerConnection.oniceconnectionstatechange = () => {
-      console.log("ICE state:", peerConnection.iceConnectionState);
-    };
+    this.trackIceState(peerConnection);
 
     const offer = await peerConnection.createOffer();
     await peerConnection.setLocalDescription(offer);
@@ -208,15 +279,31 @@ class WebRTCService {
    * Panggil ini SEKALI aja pas app mulai & user udah login, ga perlu nunggu
    * user pilih device dulu — supaya PC selalu siap "ngangkat telepon".
    */
+
   listenForIncomingCalls(userId: string, myDeviceId: string) {
+    this.incomingCallUnsubscribes.forEach((unsubscribe) => unsubscribe());
+    this.incomingCallUnsubscribes = [];
+
     const callsRef = ref(db, `calls/${userId}`);
-    onChildAdded(callsRef, (snapshot) => {
+    const suffix = `_to_${myDeviceId}`;
+
+    const handleSnapshot = (snapshot: DataSnapshot) => {
       const callId = snapshot.key;
-      if (!callId?.endsWith(`_to_${myDeviceId}`)) return;
+      if (!callId?.endsWith(suffix)) return;
       const data = snapshot.val();
-      if (!data?.offer || data.answer) return; // bukan offer baru / udah dijawab
-      void this.answerCall(userId, callId, data.offer);
-    });
+      const offer = data?.offer;
+      if (!offer?.sdp) return;
+
+      if (this.handledOffers.get(callId) === offer.sdp) return; // offer ini udah dijawab
+
+      this.handledOffers.set(callId, offer.sdp);
+      void this.answerCall(userId, callId, offer);
+    };
+
+    this.incomingCallUnsubscribes.push(onChildAdded(callsRef, handleSnapshot));
+    this.incomingCallUnsubscribes.push(
+      onChildChanged(callsRef, handleSnapshot),
+    );
   }
 
   private async answerCall(
@@ -224,6 +311,7 @@ class WebRTCService {
     callId: string,
     offer: RTCSessionDescriptionInit,
   ) {
+    this.negotiationState = "connecting";
     this.clearCallSignalListeners();
     this.peerConnection?.close();
     const peerConnection = new RTCPeerConnection(configuration);
@@ -235,9 +323,7 @@ class WebRTCService {
       this.setupDataChannelHandlers();
     };
 
-    peerConnection.oniceconnectionstatechange = () => {
-      console.log("ICE state:", peerConnection.iceConnectionState);
-    };
+    this.trackIceState(peerConnection);
 
     const callRef = ref(db, `calls/${userId}/${callId}`);
     peerConnection.onicecandidate = ({ candidate }) => {

@@ -5,12 +5,24 @@ import {
 } from "@/components/other/ClipboardModal";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import { ContextMenu, ContextMenuContent, ContextMenuItem, ContextMenuTrigger } from "@/components/ui/context-menu";
+import {
+  ContextMenu,
+  ContextMenuContent,
+  ContextMenuItem,
+  ContextMenuTrigger,
+} from "@/components/ui/context-menu";
 import { handleLogout } from "@/handle/handleAuth";
 import { type Device } from "@/interface/interface";
 import { orbitModel } from "@/models/orbitModel";
 import { webRTCService } from "@/services/webrtcService";
-import { LogOut, MonitorX, Send, Trash2, UploadCloud } from "lucide-react";
+import {
+  LogOut,
+  MonitorX,
+  RefreshCw,
+  Send,
+  Trash2,
+  UploadCloud,
+} from "lucide-react";
 import { useEffect, useMemo, useState } from "react";
 
 export default function HomePage({ userId }: { userId: string }) {
@@ -19,6 +31,8 @@ export default function HomePage({ userId }: { userId: string }) {
   const [clipboardHistory, setClipboardHistory] = useState<
     ClipboardHistoryItem[]
   >([]);
+  const [isP2PConnected, setIsP2PConnected] = useState(false);
+  const [isReconnecting, setIsReconnecting] = useState(false);
 
   const currentUser = useMemo(
     () => (userId ? { uid: userId } : null),
@@ -42,17 +56,11 @@ export default function HomePage({ userId }: { userId: string }) {
     if (!currentUser || !deviceInfo) return;
 
     orbitModel.setDeviceOnline(currentUser.uid, deviceInfo.id, deviceInfo.name);
-
-    // PENTING: mulai dengerin panggilan masuk begitu login, JANGAN nunggu
-    // user pilih device dulu — biar PC selalu siap "ngangkat telepon"
-    // kapan pun HP/device lain nyoba connect.
     webRTCService.listenForIncomingCalls(currentUser.uid, deviceInfo.id);
-
-    // Callback status — INI YANG SEBELUMNYA GA ADA, makanya kirim/gagal
-    // ga ada pemberitahuan sama sekali di UI.
     webRTCService.onConnectionOpen = () => {
       alert("Koneksi P2P berhasil terhubung!");
     };
+
     webRTCService.onFileReceived = (blob, meta) => {
       const url = URL.createObjectURL(blob);
       const a = document.createElement("a");
@@ -62,6 +70,7 @@ export default function HomePage({ userId }: { userId: string }) {
       URL.revokeObjectURL(url);
       alert(`File "${meta.name}" berhasil diterima!`);
     };
+
     webRTCService.onClipboardReceived = (text) => {
       setClipboardHistory((history) => [
         {
@@ -79,6 +88,9 @@ export default function HomePage({ userId }: { userId: string }) {
     webRTCService.onError = (message) => {
       alert(`Gagal: ${message}`);
     };
+    webRTCService.onConnectionStateChange = (connection) => {
+      setIsP2PConnected(connection);
+    };
 
     const unsubscribe = orbitModel.listenToDevices(
       currentUser.uid,
@@ -89,11 +101,11 @@ export default function HomePage({ userId }: { userId: string }) {
         setDevices(otherDevices);
 
         setSelectedDevice((prevSelected) => {
-          if (
-            prevSelected &&
-            otherDevices.some((dev) => dev.id === prevSelected.id)
-          ) {
-            return prevSelected;
+          if (prevSelected) {
+            const updatedSelectedDevice = otherDevices.find(
+              (dev) => dev.id === prevSelected.id,
+            );
+            if (updatedSelectedDevice) return updatedSelectedDevice;
           }
           return otherDevices[0] ?? null;
         });
@@ -106,23 +118,41 @@ export default function HomePage({ userId }: { userId: string }) {
       webRTCService.onFileReceived = undefined;
       webRTCService.onClipboardReceived = undefined;
       webRTCService.onError = undefined;
+      webRTCService.onConnectionStateChange = undefined;
     };
   }, [currentUser, deviceInfo]);
 
   useEffect(() => {
-    if (
-      currentUser &&
-      deviceInfo &&
-      selectedDevice &&
-      selectedDevice.status === "online"
-    ) {
-      webRTCService.createOffer(
-        currentUser.uid,
-        selectedDevice.id,
-        deviceInfo.id,
-      );
-    }
-  }, [selectedDevice, currentUser, deviceInfo]);
+    if (!currentUser || !deviceInfo || !selectedDevice) return;
+    if (selectedDevice.status !== "online") return;
+
+    const interval = window.setInterval(() => {
+      if (webRTCService.canAttemptReconnect()) {
+        webRTCService.createOffer(
+          currentUser.uid,
+          selectedDevice.id,
+          deviceInfo.id,
+        );
+      }
+    }, 20000);
+
+    return () => window.clearInterval(interval);
+  }, [currentUser, deviceInfo, selectedDevice]);
+
+  // useEffect(() => {
+  //   if (
+  //     currentUser &&
+  //     deviceInfo &&
+  //     selectedDevice &&
+  //     selectedDevice.status === "online"
+  //   ) {
+  //     webRTCService.createOffer(
+  //       currentUser.uid,
+  //       selectedDevice.id,
+  //       deviceInfo.id,
+  //     );
+  //   }
+  // }, [selectedDevice, currentUser, deviceInfo]);
 
   const handleConnectP2P = () => {
     if (currentUser && deviceInfo && selectedDevice) {
@@ -131,6 +161,21 @@ export default function HomePage({ userId }: { userId: string }) {
         selectedDevice.id,
         deviceInfo.id,
       );
+    }
+  };
+
+  const handleRefreshConnection = async () => {
+    if (!currentUser || !deviceInfo || !selectedDevice) return;
+    setIsReconnecting(true);
+    try {
+      await webRTCService.createOffer(
+        currentUser.uid,
+        selectedDevice.id,
+        deviceInfo.id,
+        true,
+      );
+    } finally {
+      window.setTimeout(() => setIsReconnecting(false), 1000);
     }
   };
 
@@ -277,9 +322,11 @@ export default function HomePage({ userId }: { userId: string }) {
                   {selectedDevice.deviceName}
                 </h3>
                 <p className="text-xs text-slate-400">
-                  {selectedDevice.status === "online"
-                    ? "Ready to transfer"
-                    : "Device is offline"}
+                  {selectedDevice.status !== "online"
+                    ? "Device is offline"
+                    : isP2PConnected
+                      ? "P2P connected"
+                      : "Ready to transfer"}
                 </p>
               </div>
             </header>
@@ -320,6 +367,18 @@ export default function HomePage({ userId }: { userId: string }) {
                   history={clipboardHistory}
                   onClearHistory={() => setClipboardHistory([])}
                 />
+                <Button
+                  size="lg"
+                  variant="outline"
+                  onClick={handleRefreshConnection}
+                  disabled={selectedDevice.status !== "online" || isReconnecting}
+                  title="Reconnect P2P"
+                  className="rounded-xl px-4 h-12">
+                  <RefreshCw
+                    size={18}
+                    className={isReconnecting ? "animate-spin" : ""}
+                  />
+                </Button>
               </div>
             </div>
           </>

@@ -1,4 +1,12 @@
-import { app, BrowserWindow, clipboard, ipcMain } from "electron";
+import {
+  app,
+  BrowserWindow,
+  clipboard,
+  ipcMain,
+  Menu,
+  nativeImage,
+  Tray,
+} from "electron";
 import path from "node:path";
 import os from "node:os";
 import { fileURLToPath } from "node:url";
@@ -12,6 +20,8 @@ process.env.VITE_PUBLIC = app.isPackaged
   : path.join(__dirname, "../public");
 
 let win: BrowserWindow | null;
+let tray: Tray | null;
+let isQuitting = false;
 const PROTOCOL = "orbit";
 
 // Simpen URL deep link kalau app baru "cold start" lewat orbit://
@@ -29,7 +39,7 @@ function createWindow() {
     },
   });
 
-  if(process.env.VITE_DEV_SERVER_URL){
+  if (process.env.VITE_DEV_SERVER_URL) {
     win.webContents.openDevTools();
   }
 
@@ -37,6 +47,13 @@ function createWindow() {
     if (pendingDeepLink) {
       win?.webContents.send("deep-link", pendingDeepLink);
       pendingDeepLink = null;
+    }
+  });
+
+  win.on("close", (event) => {
+    if (!isQuitting) {
+      event.preventDefault();
+      win?.hide();
     }
   });
 
@@ -49,6 +66,44 @@ function createWindow() {
         : path.join(__dirname, "../dist");
     win.loadFile(path.join(dist, "index.html"));
   }
+}
+
+function createTray() {
+  const iconDir = app.isPackaged
+    ? (process.env.DIST as string)
+    : path.join(__dirname, "../public");
+  const iconPath = path.join(iconDir, "mdi_orbit.png");
+
+  const trayIcon = nativeImage
+    .createFromPath(iconPath)
+    .resize({ width: 16, height: 16 });
+
+  tray = new Tray(trayIcon);
+  tray.setToolTip("Orbit - is active");
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: "Open Orbit",
+      click: () => {
+        win?.show();
+        win?.focus();
+      },
+    },
+    { type: "separator" },
+    {
+      label: "Exit",
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+  tray.setContextMenu(contextMenu);
+
+  tray.on("click", () => {
+    win?.show();
+    win?.focus();
+  });
 }
 
 function handleDeepLink(url: string) {
@@ -97,6 +152,7 @@ if (!gotSingleInstanceLock) {
 
   app.whenReady().then(() => {
     createWindow();
+    createTray();
 
     const initialUrl = process.argv.find((arg) =>
       arg.startsWith(`${PROTOCOL}://`),
@@ -106,6 +162,10 @@ if (!gotSingleInstanceLock) {
     }
   });
 }
+
+app.on("before-quit", () => {
+  isQuitting = true;
+});
 
 app.on("window-all-closed", () => {
   if (process.platform !== "darwin") {
