@@ -16,7 +16,6 @@ import { type Device } from "@/interface/interface";
 import { orbitModel } from "@/models/orbitModel";
 import {
   newTransferId,
-  notifyConnectionError,
   notifyDeviceConnected,
   showTransferProgress,
   showTransferResult,
