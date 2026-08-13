@@ -14,6 +14,12 @@ import {
 import { handleLogout } from "@/handle/handleAuth";
 import { type Device } from "@/interface/interface";
 import { orbitModel } from "@/models/orbitModel";
+import {
+  newTransferId,
+  notifyDeviceConnected,
+  showTransferProgress,
+  showTransferResult,
+} from "@/notification/NotificationService";
 import { webRTCService } from "@/services/webrtcService";
 import {
   LogOut,
@@ -23,7 +29,7 @@ import {
   Trash2,
   UploadCloud,
 } from "lucide-react";
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 
 export default function HomePage({ userId }: { userId: string }) {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -34,6 +40,10 @@ export default function HomePage({ userId }: { userId: string }) {
   const [isP2PConnected, setIsP2PConnected] = useState(false);
   const [isReconnecting, setIsReconnecting] = useState(false);
 
+  const sendNotifIdRef = useRef<number | null>(null);
+  const receiveNotifIdRef = useRef<number | null>(null);
+  const remoteDeviceNameRef = useRef<string>("Device");
+
   const currentUser = useMemo(
     () => (userId ? { uid: userId } : null),
     [userId],
@@ -42,6 +52,10 @@ export default function HomePage({ userId }: { userId: string }) {
     id: string;
     name: string;
   } | null>(null);
+
+  useEffect(() => {
+    if (selectedDevice) remoteDeviceNameRef.current = selectedDevice.deviceName;
+  }, [selectedDevice]);
 
   useEffect(() => {
     window.electronAPI.getDeviceInfo().then(({ hostname, platform }) => {
@@ -59,6 +73,7 @@ export default function HomePage({ userId }: { userId: string }) {
     webRTCService.listenForIncomingCalls(currentUser.uid, deviceInfo.id);
     webRTCService.onConnectionOpen = () => {
       alert("Koneksi P2P berhasil terhubung!");
+      notifyDeviceConnected(remoteDeviceNameRef.current);
     };
 
     webRTCService.onFileReceived = (blob, meta) => {
@@ -68,7 +83,35 @@ export default function HomePage({ userId }: { userId: string }) {
       a.download = meta.name;
       a.click();
       URL.revokeObjectURL(url);
-      alert(`File "${meta.name}" berhasil diterima!`);
+    };
+
+    // Progress & hasil TERIMA file. id notifnya dibikin sekali di awal
+    // (persen 0%, dari sinyal "file-meta") lalu dipakai lagi buat update
+    // progress & hasil akhirnya, biar 1 notif "berubah" bukan numpuk baru.
+    webRTCService.onReceiveProgress = (fileName, percent) => {
+      if (percent === 0 || receiveNotifIdRef.current === null) {
+        receiveNotifIdRef.current = newTransferId();
+      }
+      showTransferProgress(receiveNotifIdRef.current, fileName, percent, false);
+    };
+    webRTCService.onReceiveComplete = (fileName, success, error) => {
+      const id = receiveNotifIdRef.current ?? newTransferId();
+      showTransferResult(id, fileName, false, success, error);
+      receiveNotifIdRef.current = null;
+    };
+
+    // Progress & hasil KIRIM file. id-nya dibikin di handleFileChange pas
+    // user mulai kirim (lihat di bawah), disimpan di sendNotifIdRef.
+    webRTCService.onSendProgress = (fileName, percent) => {
+      if (sendNotifIdRef.current === null) return;
+      showTransferProgress(sendNotifIdRef.current, fileName, percent, true);
+    };
+    webRTCService.onSendComplete = (fileName, success, error) => {
+      const id = sendNotifIdRef.current;
+      if (id !== null) {
+        showTransferResult(id, fileName, true, success, error);
+      }
+      sendNotifIdRef.current = null;
     };
 
     webRTCService.onClipboardReceived = (text) => {
@@ -119,6 +162,10 @@ export default function HomePage({ userId }: { userId: string }) {
       webRTCService.onClipboardReceived = undefined;
       webRTCService.onError = undefined;
       webRTCService.onConnectionStateChange = undefined;
+      webRTCService.onSendProgress = undefined;
+      webRTCService.onSendComplete = undefined;
+      webRTCService.onReceiveProgress = undefined;
+      webRTCService.onReceiveComplete = undefined;
     };
   }, [currentUser, deviceInfo]);
 
@@ -204,11 +251,34 @@ export default function HomePage({ userId }: { userId: string }) {
 
     if (!file) return;
 
+    const notifId = newTransferId();
+    sendNotifIdRef.current = notifId;
+    showTransferProgress(notifId, file.name, 0, true);
+
     try {
       await webRTCService.waitForConnection();
       await webRTCService.sendFile(file);
     } catch (error) {
       console.error("Gagal mengirim file via P2P:", error);
+      // Kalau sendNotifIdRef udah null, berarti webRTCService.sendFile
+      // sendiri yang gagal & udah munculin notif hasilnya lewat
+      // onSendComplete — jangan munculin notif gagal dobel di sini.
+      // Ini cuma buat nangkep gagal SEBELUM sendFile sempat mulai
+      // (mis. waitForConnection timeout).
+      if (sendNotifIdRef.current === notifId) {
+        showTransferResult(
+          notifId,
+          file.name,
+          true,
+          false,
+          error instanceof Error ? error.message : "Gagal terhubung.",
+        );
+        sendNotifIdRef.current = null;
+      }
+    } finally {
+      // Reset file input supaya kalau user pilih file yang sama lagi,
+      // onChange event akan fire (karena value-nya di-reset ke empty string)
+      event.target.value = "";
     }
   };
 
@@ -371,7 +441,9 @@ export default function HomePage({ userId }: { userId: string }) {
                   size="lg"
                   variant="outline"
                   onClick={handleRefreshConnection}
-                  disabled={selectedDevice.status !== "online" || isReconnecting}
+                  disabled={
+                    selectedDevice.status !== "online" || isReconnecting
+                  }
                   title="Reconnect P2P"
                   className="rounded-xl px-4 h-12">
                   <RefreshCw

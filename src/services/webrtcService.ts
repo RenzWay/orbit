@@ -39,11 +39,30 @@ class WebRTCService {
   public onError?: (message: string) => void;
 
   public onConnectionStateChange?: (connected: boolean) => void;
+
+  public onSendProgress?: (fileName: string, percent: number) => void;
+  public onSendComplete?: (
+    fileName: string,
+    success: boolean,
+    error?: string,
+  ) => void;
+  public onReceiveProgress?: (fileName: string, percent: number) => void;
+  public onReceiveComplete?: (
+    fileName: string,
+    success: boolean,
+    error?: string,
+  ) => void;
+
+  private incomingBytesReceived = 0;
+  private lastReceivedPercent = -1;
+
   private handledOffers = new Map<string, string>();
   private incomingCallUnsubscribes: Array<() => void> = [];
 
   private negotiationState: "idle" | "connecting" | "connected" | "failed" =
     "idle";
+
+  private isTransferring = false;
 
   // Watchdog untuk ICE "checking" yang tersangkut dan grace period untuk
   // status "disconnected" yang biasanya hanya gangguan jaringan sesaat.
@@ -80,6 +99,7 @@ class WebRTCService {
     channel.onclose = () => {
       console.log("DataChannel CLOSED");
       if (this.negotiationState !== "failed") this.negotiationState = "idle";
+      this.isTransferring = false
       this.onConnectionStateChange?.(false);
     };
     channel.onerror = (event) => {
@@ -108,6 +128,30 @@ class WebRTCService {
           if (parsed.type === "file-meta") {
             this.incomingMeta = parsed;
             this.incomingChunks = [];
+            this.incomingBytesReceived = 0;
+            this.lastReceivedPercent = -1;
+            this.isTransferring = true;
+            this.onReceiveProgress?.(parsed.name, 0);
+          } else if (parsed.type === "file-complete") {
+            // PENTING: sebelumnya PC nganggep "sekali dapet data biner =
+            // file selesai" — cuma cocok kalau pengirim kirim sekaligus
+            // dalam satu potongan. Mobile sekarang kirim per-chunk 16KB
+            // + sinyal "file-complete" di akhir, jadi kalau PC masih pakai
+            // logika lama, file yang diterima dari HP bakal kepotong cuma
+            // 16KB pertama doang. Sekarang PC nunggu sinyal ini dulu baru
+            // menganggap file-nya lengkap.
+            if (this.incomingMeta) {
+              const meta = this.incomingMeta;
+              const blob = new Blob(this.incomingChunks, {
+                type: meta.mimeType,
+              });
+              this.onFileReceived?.(blob, meta);
+              this.onReceiveComplete?.(meta.name, true);
+            }
+            this.incomingMeta = null;
+            this.incomingChunks = [];
+            this.incomingBytesReceived = 0;
+            this.isTransferring = false;
           } else if (parsed.type === "clipboard" || parsed.t === "clipboard") {
             const textContent = parsed.payload || parsed.p || parsed.content;
             if (textContent) {
@@ -120,16 +164,24 @@ class WebRTCService {
           console.error("Gagal parse data WebRTC:", err);
         }
       } else {
-        // Data biner = isi file (untuk versi sederhana ini dikirim sekali utuh,
-        // bukan per-chunk — cukup untuk file kecil/menengah dulu)
-        this.incomingChunks.push(event.data as ArrayBuffer);
-        if (this.incomingMeta) {
-          const blob = new Blob(this.incomingChunks, {
-            type: this.incomingMeta.mimeType,
-          });
-          this.onFileReceived?.(blob, this.incomingMeta);
-          this.incomingMeta = null;
-          this.incomingChunks = [];
+        // Data biner = satu potongan (chunk) isi file. Ditumpuk dulu di
+        // this.incomingChunks, baru digabung jadi Blob pas sinyal
+        // "file-complete" diterima (lihat blok string di atas).
+        const chunk = event.data as ArrayBuffer;
+        this.incomingChunks.push(chunk);
+        this.incomingBytesReceived += chunk.byteLength;
+
+        if (this.incomingMeta && this.incomingMeta.size > 0) {
+          const percent = Math.min(
+            100,
+            Math.round(
+              (this.incomingBytesReceived / this.incomingMeta.size) * 100,
+            ),
+          );
+          if (percent !== this.lastReceivedPercent) {
+            this.lastReceivedPercent = percent;
+            this.onReceiveProgress?.(this.incomingMeta.name, percent);
+          }
         }
       }
     };
@@ -170,13 +222,18 @@ class WebRTCService {
       } else if (state === "disconnected") {
         // Jangan langsung gagal: state ini sering pulih sendiri setelah
         // gangguan jaringan singkat, sehingga menghindari reconnect flapping.
+        // Kalau lagi ada transfer aktif, kasih grace period JAUH lebih
+        // panjang — transfer file (apalagi yang gede) sendiri bisa bikin
+        // ICE sempat "disconnected" sesaat karena jalur network lagi sibuk,
+        // itu bukan berarti koneksinya beneran putus.
+        const graceMs = this.isTransferring ? 15_000 : 4_000;
         this.disconnectGraceTimer = window.setTimeout(() => {
           if (this.peerConnection !== peerConnection) return;
           if (peerConnection.iceConnectionState === "disconnected") {
             this.negotiationState = "failed";
             this.onConnectionStateChange?.(false);
           }
-        }, 4_000);
+        }, graceMs);
       } else if (state === "failed" || state === "closed") {
         this.negotiationState = "failed";
         this.onConnectionStateChange?.(false);
@@ -193,8 +250,11 @@ class WebRTCService {
    * connect ulang sekarang?". Jawabannya TIDAK kalau lagi belum konek TAPI
    * masih dalam proses checking/connecting — supaya proses itu dikasih
    * kesempatan selesai dulu, bukan langsung dipotong & diulang dari nol.
+   * JUGA tidak boleh kalau lagi ada transfer aktif — reconnect di tengah
+   * transfer = motong peerConnection yang lagi dipakai ngirim/nerima file.
    */
   public canAttemptReconnect(): boolean {
+    if (this.isTransferring) return false;
     if (this.isConnected()) return false;
     return this.negotiationState !== "connecting";
   }
@@ -232,6 +292,11 @@ class WebRTCService {
     myDeviceId: string,
     force = false,
   ) {
+    // JANGAN PERNAH motong koneksi yang lagi dipakai transfer aktif, bahkan
+    // dengan force=true — force cuma buat "user maksa reconnect manual",
+    // dan itu ga masuk akal kalau lagi ada file yang lagi jalan dikirim.
+    if (this.isTransferring) return;
+
     const callId = `${myDeviceId}_to_${targetDeviceId}`;
     const channelIsActive =
       this.dataChannel?.readyState === "connecting" ||
@@ -349,6 +414,10 @@ class WebRTCService {
     callId: string,
     offer: RTCSessionDescriptionInit,
   ) {
+    // Sama kayak createOffer: jangan nyambut offer baru (yang bakal nutup
+    // peerConnection sekarang) kalau lagi ada transfer aktif jalan.
+    if (this.isTransferring) return;
+
     this.negotiationState = "connecting";
     this.clearCallSignalListeners();
     this.clearIceWatchdogs();
@@ -388,12 +457,15 @@ class WebRTCService {
     this.callSignalUnsubscribes.push(stopOfferCandidatesListener);
   }
 
-  sendFile(file: File) {
-    if (this.dataChannel?.readyState !== "open") {
+  async sendFile(file: File): Promise<void> {
+    const channel = this.dataChannel;
+    if (channel?.readyState !== "open") {
       this.onError?.("Koneksi P2P belum terbuka. Coba pilih ulang device-nya.");
       throw new Error("Koneksi P2P belum terbuka.");
     }
-    this.dataChannel.send(
+
+    this.isTransferring = true;
+    channel.send(
       JSON.stringify({
         type: "file-meta",
         name: file.name,
@@ -401,12 +473,54 @@ class WebRTCService {
         mimeType: file.type,
       }),
     );
-    const reader = new FileReader();
-    reader.onload = () => {
-      if (reader.result) this.dataChannel?.send(reader.result as ArrayBuffer);
-    };
-    reader.onerror = () => this.onError?.("Gagal membaca file.");
-    reader.readAsArrayBuffer(file);
+    this.onSendProgress?.(file.name, 0);
+
+    // Kirim per-chunk 16KB (samain sama sisi mobile) supaya: (1) progress
+    // bisa dilaporkan bertahap, bukan cuma "0%" lalu tiba-tiba "selesai",
+    // dan (2) file besar ga bikin datachannel keteteran ngirim satu blob
+    // raksasa sekaligus.
+    const CHUNK_SIZE = 16 * 1024;
+    let offset = 0;
+    let lastReportedPercent = -1;
+
+    try {
+      while (offset < file.size) {
+        const slice = file.slice(offset, offset + CHUNK_SIZE);
+        const buffer = await slice.arrayBuffer();
+
+        // Backpressure: kalau buffer channel udah kebanyakan antrean,
+        // tunggu dulu. THRESHOLD DITURUNIN dari 8MB ke 256KB — 8MB
+        // kegedean, bikin ratusan chunk numpuk sekaligus di socket tanpa
+        // jeda ke event loop, yang berpotensi "menenggelamkan" paket
+        // keep-alive ICE di jaringan lambat/NAT ketat sampai dianggap
+        // putus (disconnected). Threshold lebih kecil = lebih sering
+        // ngasih jeda ke browser buat proses hal lain (termasuk ICE).
+        while (channel.bufferedAmount > 256 * 1024) {
+          await new Promise((resolve) => window.setTimeout(resolve, 10));
+        }
+
+        channel.send(buffer);
+        offset += buffer.byteLength;
+
+        if (file.size > 0) {
+          const percent = Math.min(100, Math.round((offset / file.size) * 100));
+          if (percent !== lastReportedPercent) {
+            lastReportedPercent = percent;
+            this.onSendProgress?.(file.name, percent);
+          }
+        }
+      }
+
+      channel.send(JSON.stringify({ type: "file-complete" }));
+      this.onSendComplete?.(file.name, true);
+    } catch (error) {
+      console.error("Gagal mengirim file:", error);
+      const message = error instanceof Error ? error.message : "Unknown error";
+      this.onSendComplete?.(file.name, false, message);
+      throw error;
+    } finally {
+      this.isTransferring = false;
+    }
   }
 }
 

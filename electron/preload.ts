@@ -15,4 +15,13 @@ contextBridge.exposeInMainWorld("electronAPI", {
 
     return () => ipcRenderer.removeListener("deep-link", listener);
   },
+  notify: (payload: {
+    id: number;
+    title: string;
+    body?: string;
+    silent?: boolean;
+    urgent?: boolean;
+  }) => ipcRenderer.invoke("notify", payload),
+  closeNotification: (id: number) =>
+    ipcRenderer.invoke("close-notification", id),
 });

@@ -5,6 +5,7 @@ import {
   ipcMain,
   Menu,
   nativeImage,
+  Notification,
   Tray,
 } from "electron";
 import path from "node:path";
@@ -66,6 +67,13 @@ function createWindow() {
         : path.join(__dirname, "../dist");
     win.loadFile(path.join(dist, "index.html"));
   }
+}
+
+function getAppIconPath() {
+  const iconDir = app.isPackaged
+    ? (process.env.DIST as string)
+    : path.join(__dirname, "../public");
+  return path.join(iconDir, "mdi_orbit.png");
 }
 
 function createTray() {
@@ -201,4 +209,55 @@ ipcMain.handle("get-device-info", () => {
     hostname: os.hostname(),
     platform: platformLabel,
   };
+});
+
+// --- Notifikasi native ---
+// Dipakai buat 3 jenis notif (niru pola dari sisi mobile): device
+// connected, progress transfer, dan hasil transfer. `id` dipakai buat
+// nge-"update" notif yang sama (progress -> hasil) dengan cara nutup yang
+// lama sebelum nampilin yang baru, biar ga numpuk banyak notif per transfer.
+const activeNotifications = new Map<number, Notification>();
+
+ipcMain.handle(
+  "notify",
+  (
+    _event,
+    payload: {
+      id: number;
+      title: string;
+      body?: string;
+      silent?: boolean;
+      urgent?: boolean;
+    },
+  ) => {
+    if (!Notification.isSupported()) return;
+
+    activeNotifications.get(payload.id)?.close();
+
+    const notification = new Notification({
+      title: payload.title,
+      body: payload.body ?? "",
+      silent: payload.silent ?? false,
+      icon: nativeImage.createFromPath(getAppIconPath()),
+      urgency: payload.urgent ? "critical" : "normal",
+    });
+
+    notification.on("click", () => {
+      win?.show();
+      win?.focus();
+    });
+    notification.on("close", () => {
+      if (activeNotifications.get(payload.id) === notification) {
+        activeNotifications.delete(payload.id);
+      }
+    });
+
+    notification.show();
+    activeNotifications.set(payload.id, notification);
+  },
+);
+
+ipcMain.handle("close-notification", (_event, id: number) => {
+  activeNotifications.get(id)?.close();
+  activeNotifications.delete(id);
 });
