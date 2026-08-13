@@ -145,7 +145,8 @@ class WebRtcManager(private val context: Context) {
         if (!wakeLock.isHeld) wakeLock.acquire(10 * 60 * 1000L) // timeout jaga-jaga 10 menit
 
         val iceServers = listOf(
-            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer()
+            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
         )
 
         val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
@@ -291,8 +292,6 @@ class WebRtcManager(private val context: Context) {
         val success = dataChannel?.send(buffer)
         Log.d(TAG, "Status pengiriman clipboard: $success")
     }
-
-    // --- SIGNALING VIA FIREBASE RTDB ---
 
     private fun createOffer(targetDeviceId: String, myDeviceId: String) {
         val constraints = MediaConstraints()
