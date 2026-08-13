@@ -34,6 +34,15 @@ export function notifyDeviceConnected(deviceName: string) {
   });
 }
 
+export function notifyConnectionError(message: string) {
+  void window.electronAPI.notify({
+    id: hashId("connection-error"),
+    title: "Koneksi P2P bermasalah",
+    body: message,
+    silent: true,
+  });
+}
+
 export function showTransferProgress(
   id: number,
   fileName: string,

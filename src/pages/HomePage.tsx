@@ -16,6 +16,7 @@ import { type Device } from "@/interface/interface";
 import { orbitModel } from "@/models/orbitModel";
 import {
   newTransferId,
+  notifyConnectionError,
   notifyDeviceConnected,
   showTransferProgress,
   showTransferResult,
@@ -72,7 +73,7 @@ export default function HomePage({ userId }: { userId: string }) {
     orbitModel.setDeviceOnline(currentUser.uid, deviceInfo.id, deviceInfo.name);
     webRTCService.listenForIncomingCalls(currentUser.uid, deviceInfo.id);
     webRTCService.onConnectionOpen = () => {
-      alert("Koneksi P2P berhasil terhubung!");
+      // alert("Koneksi P2P berhasil terhubung!");
       notifyDeviceConnected(remoteDeviceNameRef.current);
     };
 
@@ -184,7 +185,8 @@ export default function HomePage({ userId }: { userId: string }) {
     }, 20000);
 
     return () => window.clearInterval(interval);
-  }, [currentUser, deviceInfo, selectedDevice]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentUser, deviceInfo, selectedDevice?.id, selectedDevice?.status]);
 
   // useEffect(() => {
   //   if (
