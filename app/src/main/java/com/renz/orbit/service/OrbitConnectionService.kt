@@ -14,6 +14,7 @@ import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.renz.orbit.MainActivity
 import com.renz.orbit.R
+import com.renz.orbit.notification.NotificationHelper
 
 /**
  * Service yang tetap hidup di background, tugasnya CUMA 2:
@@ -58,6 +59,13 @@ class OrbitConnectionService : Service() {
         return START_STICKY
     }
 
+    // Nyimpen device ID yang lagi online, dibandingin tiap snapshot Firebase
+    // berubah buat ngedeteksi TRANSISI offline->online doang (bukan notify
+    // ulang tiap snapshot dateng, itu bakal spam banget soalnya presence
+    // Firebase bisa update lumayan sering).
+    private val knownOnlineDeviceIds = mutableSetOf<String>()
+    private var isFirstSnapshot = true
+
     private fun startListening() {
         val uid = FirebaseAuth.getInstance().currentUser?.uid ?: return
         val myDeviceId = OrbitRuntime.orbitPresence.deviceId
@@ -66,6 +74,25 @@ class OrbitConnectionService : Service() {
 
         OrbitRuntime.orbitPresence.listenToOtherDevices { devices ->
             OrbitRuntime.updateDevice(devices)
+
+            val currentlyOnlineIds = devices
+                .filter { it.status.lowercase() == "kotlin" }
+                .map { it.id }
+                .toSet()
+
+            if (!isFirstSnapshot) {
+                val newlyOnline = currentlyOnlineIds - knownOnlineDeviceIds
+                newlyOnline.forEach { deviceId ->
+                    val device = devices.firstOrNull() { it.id == deviceId }
+                    if (device != null) {
+                        NotificationHelper.notifyDeviceOnline(this, device.deviceName)
+                    }
+
+                }
+            }
+            isFirstSnapshot = false
+            knownOnlineDeviceIds.clear()
+            knownOnlineDeviceIds.addAll(currentlyOnlineIds)
         }
 
         OrbitRuntime.webRtcManager.listenForIncomingCalls(myDeviceId) { fromDeviceId ->
@@ -109,12 +136,12 @@ class OrbitConnectionService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        return NotificationCompat.Builder(this,CHANNEL_ID)
+        return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Orbit aktif")
             .setContentText("Siap menerima file & clipboard dari device lain")
             .setSmallIcon(R.drawable.ic_launcher_foreground)
             .setContentIntent(openIntent)
-            .setOngoing(true) // ga bisa di-swipe-dismiss manual sama user
+            .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
             .build()
     }
