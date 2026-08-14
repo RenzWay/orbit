@@ -173,7 +173,7 @@ export default function HomePage({ userId }: { userId: string }) {
     if (!currentUser || !deviceInfo || !selectedDevice) return;
     if (selectedDevice.status !== "online") return;
 
-    const interval = window.setInterval(() => {
+    const attemptConnect = () => {
       if (webRTCService.canAttemptReconnect()) {
         webRTCService.createOffer(
           currentUser.uid,
@@ -181,26 +181,16 @@ export default function HomePage({ userId }: { userId: string }) {
           deviceInfo.id,
         );
       }
-    }, 20000);
+    };
+
+    // Langsung coba konek begitu device online kepilih (termasuk saat app
+    // baru dibuka), jangan nunggu tick interval pertama.
+    attemptConnect();
+    const interval = window.setInterval(attemptConnect, 20000);
 
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, deviceInfo, selectedDevice?.id, selectedDevice?.status]);
-
-  // useEffect(() => {
-  //   if (
-  //     currentUser &&
-  //     deviceInfo &&
-  //     selectedDevice &&
-  //     selectedDevice.status === "online"
-  //   ) {
-  //     webRTCService.createOffer(
-  //       currentUser.uid,
-  //       selectedDevice.id,
-  //       deviceInfo.id,
-  //     );
-  //   }
-  // }, [selectedDevice, currentUser, deviceInfo]);
 
   const handleConnectP2P = () => {
     if (currentUser && deviceInfo && selectedDevice) {
