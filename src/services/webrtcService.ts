@@ -15,6 +15,9 @@ const configuration: RTCConfiguration = {
     { urls: "stun:stun.l.google.com:19302" },
     { urls: "stun:stun1.l.google.com:19302" },
   ],
+  // Pre-gather ICE candidates sebelum offer/answer dibuat, jadi kandidat
+  // langsung siap dikirim begitu negosiasi mulai — mempercepat handshake.
+  iceCandidatePoolSize: 10,
 };
 
 interface IncomingFileMeta {
@@ -209,7 +212,7 @@ class WebRTCService {
             this.negotiationState = "failed";
             this.onConnectionStateChange?.(false);
           }
-        }, 12_000);
+        }, 8_000);
       } else if (state === "connected" || state === "completed") {
         // SENGAJA TIDAK di-set "connected" di sini. ICE connected cuma
         // berarti jalur network-nya nyambung — datachannel (SCTP) masih

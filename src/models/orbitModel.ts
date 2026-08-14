@@ -49,7 +49,9 @@ class OrbitModel {
 
   setDeviceOnline(userId: string, deviceId: string, deviceName: string) {
     const deviceRef = ref(db, `presence/${userId}/${deviceId}`);
-    return onValue(ref(db, ".info/connected"), (snapshot) => {
+    const connectedRef = ref(db, ".info/connected");
+
+    return onValue(connectedRef, (snapshot) => {
       if (!snapshot.val()) return;
       void onDisconnect(deviceRef).set({
         deviceName,

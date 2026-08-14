@@ -43,6 +43,8 @@ export default function HomePage({ userId }: { userId: string }) {
   const sendNotifIdRef = useRef<number | null>(null);
   const receiveNotifIdRef = useRef<number | null>(null);
   const remoteDeviceNameRef = useRef<string>("Device");
+  const lastConnectAttemptRef = useRef<string | null>(null);
+  const connectAttemptCooldownRef = useRef<number | null>(null);
 
   const currentUser = useMemo(
     () => (userId ? { uid: userId } : null),
@@ -173,17 +175,45 @@ export default function HomePage({ userId }: { userId: string }) {
     if (!currentUser || !deviceInfo || !selectedDevice) return;
     if (selectedDevice.status !== "online") return;
 
-    const interval = window.setInterval(() => {
-      if (webRTCService.canAttemptReconnect()) {
-        webRTCService.createOffer(
-          currentUser.uid,
-          selectedDevice.id,
-          deviceInfo.id,
-        );
+    const connectionKey = `${currentUser.uid}:${deviceInfo.id}->${selectedDevice.id}`;
+    const attemptConnect = () => {
+      if (lastConnectAttemptRef.current === connectionKey) {
+        return;
       }
-    }, 20000);
 
-    return () => window.clearInterval(interval);
+      if (!webRTCService.canAttemptReconnect()) return;
+
+      lastConnectAttemptRef.current = connectionKey;
+      if (connectAttemptCooldownRef.current !== null) {
+        window.clearTimeout(connectAttemptCooldownRef.current);
+      }
+
+      connectAttemptCooldownRef.current = window.setTimeout(() => {
+        lastConnectAttemptRef.current = null;
+        connectAttemptCooldownRef.current = null;
+      }, 2000);
+
+      void webRTCService.createOffer(
+        currentUser.uid,
+        selectedDevice.id,
+        deviceInfo.id,
+      );
+    };
+
+    // Startup harus langsung mencoba koneksi saat app dibuka, tanpa butuh
+    // refresh manual. Guard ini hanya mencegah duplicate trigger yang sama
+    // dalam 2 detik, bukan mematikan reconnect otomatis yang benar.
+    attemptConnect();
+    const interval = window.setInterval(attemptConnect, 5000);
+
+    return () => {
+      window.clearInterval(interval);
+      if (connectAttemptCooldownRef.current !== null) {
+        window.clearTimeout(connectAttemptCooldownRef.current);
+        connectAttemptCooldownRef.current = null;
+      }
+      lastConnectAttemptRef.current = null;
+    };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, deviceInfo, selectedDevice?.id, selectedDevice?.status]);
 
