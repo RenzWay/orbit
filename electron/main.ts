@@ -20,6 +20,14 @@ process.env.VITE_PUBLIC = app.isPackaged
   ? process.env.DIST
   : path.join(__dirname, "../public");
 
+// Secara default Chromium menyembunyikan IP lokal di ICE candidate WebRTC
+// di balik hostname mDNS (xxxx.local). WebRTC native di Android tidak bisa
+// me-resolve hostname .local tersebut, sehingga jalur langsung antar device
+// di Wi-Fi yang sama tidak pernah terbentuk dan ICE tersangkut lama di
+// "checking". Matikan fitur itu supaya IP LAN asli dikirim dan koneksi
+// P2P sesama jaringan langsung tersambung.
+app.commandLine.appendSwitch("disable-features", "WebRtcHideLocalIpsWithMdns");
+
 let win: BrowserWindow | null;
 let tray: Tray | null;
 let isQuitting = false;

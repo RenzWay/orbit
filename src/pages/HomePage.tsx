@@ -173,7 +173,7 @@ export default function HomePage({ userId }: { userId: string }) {
     if (!currentUser || !deviceInfo || !selectedDevice) return;
     if (selectedDevice.status !== "online") return;
 
-    const interval = window.setInterval(() => {
+    const attemptConnect = () => {
       if (webRTCService.canAttemptReconnect()) {
         webRTCService.createOffer(
           currentUser.uid,
@@ -181,7 +181,14 @@ export default function HomePage({ userId }: { userId: string }) {
           deviceInfo.id,
         );
       }
-    }, 20000);
+    };
+
+    // Langsung coba konek begitu device online kepilih — jangan nunggu
+    // tick interval pertama. Interval-nya cuma buat retry kalau belum
+    // nyambung; canAttemptReconnect() jaga biar negosiasi yang lagi
+    // jalan ga dipotong.
+    attemptConnect();
+    const interval = window.setInterval(attemptConnect, 5000);
 
     return () => window.clearInterval(interval);
     // eslint-disable-next-line react-hooks/exhaustive-deps
