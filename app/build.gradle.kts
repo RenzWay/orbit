@@ -15,13 +15,21 @@ android {
         minSdk = 24
         targetSdk = 37
         versionCode = 1
-        versionName = "1.5.6-beta"
+        versionName = "1.5.8-beta"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
 
     buildTypes {
         release {
+            isMinifyEnabled = true
+            isShrinkResources = true
+
+            proguardFiles(
+                getDefaultProguardFile("proguard-android-optimize.txt"),
+                "proguard-rules.pro"
+            )
+
             optimization {
                 enable = false
             }

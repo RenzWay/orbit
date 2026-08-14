@@ -87,7 +87,7 @@ class WebRtcManager(private val context: Context) {
                 val offerSdp =
                     snapshot.child("offer").child("sdp").getValue(String::class.java) ?: return
 
-                if (handledOfferSdp[callId] == offerSdp) return // offer ini udah diproses
+                if (handledOfferSdp[callId] == offerSdp) return
                 handledOfferSdp[callId] = offerSdp
                 handleCallsId.add(callId)
 
@@ -138,11 +138,10 @@ class WebRtcManager(private val context: Context) {
         return true
     }
 
-
     // 1. Inisialisasi PeerConnection & ICE Server (Google STUN)
     fun createPeerConnection(targetDeviceId: String, myDeviceId: String, isInitiator: Boolean) {
         if (!wifiLock.isHeld) wifiLock.acquire()
-        if (!wakeLock.isHeld) wakeLock.acquire(10 * 60 * 1000L) // timeout jaga-jaga 10 menit
+        if (!wakeLock.isHeld) wakeLock.acquire(10 * 60 * 1000L)
 
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
@@ -301,8 +300,8 @@ class WebRtcManager(private val context: Context) {
                     peerConnection?.setLocalDescription(this, it)
                     val uid = auth.currentUser?.uid ?: return
                     val callPath = "calls/$uid/${myDeviceId}_to_${targetDeviceId}"
-                    db.getReference(callPath).child("offer").setValue(
-                        mapOf("type" to "offer", "sdp" to it.description)
+                    db.getReference(callPath).setValue(
+                        mapOf("offer" to mapOf("type" to "offer", "sdp" to it.description))
                     )
                     listenForAnswer(targetDeviceId, myDeviceId)
                 }
@@ -419,6 +418,19 @@ class WebRtcManager(private val context: Context) {
             return dataChannel?.send(DataChannel.Buffer(buffer, true)) ?: false
         }
         return false
+    }
+
+    fun getBufferedAmount(): Long = dataChannel?.bufferedAmount() ?: 0L
+
+    suspend fun awaitBufferedAmountDrained(timeoutMs: Long = 10_000) {
+        val start = System.currentTimeMillis()
+        while (getBufferedAmount() > 0) {
+            if (System.currentTimeMillis() - start > timeoutMs) {
+                Log.w(TAG, "Timeout nunggu buffer kosong, lanjut close paksa.")
+                return
+            }
+            kotlinx.coroutines.delay(50.milliseconds)
+        }
     }
 
     fun closeConnection() {
