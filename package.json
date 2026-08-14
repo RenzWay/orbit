@@ -1,7 +1,7 @@
 {
   "name": "Orbit",
   "private": true,
-  "version": "1.4.17-beta",
+  "version": "1.4.19-beta",
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
@@ -29,17 +29,20 @@
       "dist-electron/**/*"
     ],
     "win": {
+      "icon": "public/mdi_orbit.png",
       "target": [
         "nsis",
         "zip"
       ]
     },
     "mac": {
+      "icon": "public/mdi_orbit.png",
       "target": [
         "dmg"
       ]
     },
     "linux": {
+      "icon": "public/mdi_orbit.png",
       "target": [
         "AppImage",
         "deb",

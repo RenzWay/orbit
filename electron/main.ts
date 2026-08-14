@@ -6,6 +6,7 @@ import {
   Menu,
   nativeImage,
   Notification,
+  powerMonitor,
   Tray,
 } from "electron";
 import path from "node:path";
@@ -31,6 +32,7 @@ app.commandLine.appendSwitch("disable-features", "WebRtcHideLocalIpsWithMdns");
 let win: BrowserWindow | null;
 let tray: Tray | null;
 let isQuitting = false;
+let isSuspended = false;
 const PROTOCOL = "orbit";
 
 // Simpen URL deep link kalau app baru "cold start" lewat orbit://
@@ -38,9 +40,11 @@ const PROTOCOL = "orbit";
 let pendingDeepLink: string | null = null;
 
 function createWindow() {
+  const iconPath = getAppIconPath();
   win = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: nativeImage.createFromPath(iconPath),
     webPreferences: {
       preload: path.join(__dirname, "preload.mjs"),
       nodeIntegration: false,
@@ -167,6 +171,14 @@ if (!gotSingleInstanceLock) {
   });
 
   app.whenReady().then(() => {
+    // Setup auto-start pada system boot
+    if (app.isPackaged) {
+      app.setLoginItemSettings({
+        openAtLogin: true,
+        path: app.getPath("exe"),
+      });
+    }
+
     createWindow();
     createTray();
 
@@ -178,6 +190,21 @@ if (!gotSingleInstanceLock) {
     }
   });
 }
+
+// --- Handle system sleep/wake events ---
+powerMonitor.on("suspend", () => {
+  console.log("[system] laptop going to sleep...");
+  isSuspended = true;
+});
+
+powerMonitor.on("resume", () => {
+  console.log("[system] laptop waking up, reconnecting...");
+  isSuspended = false;
+  // Reconnect WebRTC dan refresh connection saat resume
+  if (win && !win.isDestroyed()) {
+    win.webContents.send("system-resumed");
+  }
+});
 
 app.on("before-quit", () => {
   isQuitting = true;
@@ -268,4 +295,12 @@ ipcMain.handle(
 ipcMain.handle("close-notification", (_event, id: number) => {
   activeNotifications.get(id)?.close();
   activeNotifications.delete(id);
+});
+
+// --- Expose system state untuk frontend ---
+ipcMain.handle("get-system-state", () => {
+  return {
+    isSuspended,
+    platform: process.platform,
+  };
 });

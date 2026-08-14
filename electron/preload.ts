@@ -8,12 +8,23 @@ contextBridge.exposeInMainWorld("electronAPI", {
       hostname: string;
       platform: string;
     }>,
+  getSystemState: () =>
+    ipcRenderer.invoke("get-system-state") as Promise<{
+      isSuspended: boolean;
+      platform: string;
+    }>,
   onDeepLink: (callback: (url: string) => void) => {
     const listener = (_event: Electron.IpcRendererEvent, url: string) =>
       callback(url);
     ipcRenderer.on("deep-link", listener);
 
     return () => ipcRenderer.removeListener("deep-link", listener);
+  },
+  onSystemResumed: (callback: () => void) => {
+    const listener = () => callback();
+    ipcRenderer.on("system-resumed", listener);
+
+    return () => ipcRenderer.removeListener("system-resumed", listener);
   },
   notify: (payload: {
     id: number;
