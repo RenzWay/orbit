@@ -2,6 +2,7 @@ package com.renz.orbit.service
 
 import android.content.Context
 import android.net.wifi.WifiManager
+import android.os.Build
 import android.os.PowerManager
 import android.util.Log
 import com.google.firebase.auth.FirebaseAuth
@@ -11,6 +12,11 @@ import com.google.firebase.database.DatabaseError
 import com.google.firebase.database.DatabaseReference
 import com.google.firebase.database.FirebaseDatabase
 import com.google.firebase.database.ValueEventListener
+import kotlinx.coroutines.CoroutineScope
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.launch
 import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
@@ -23,6 +29,8 @@ import org.webrtc.SdpObserver
 import org.webrtc.SessionDescription
 import java.nio.ByteBuffer
 import kotlin.time.Duration.Companion.milliseconds
+import kotlin.time.Duration.Companion.minutes
+import kotlin.time.Duration.Companion.seconds
 
 class WebRtcManager(private val context: Context) {
     private val db =
@@ -38,15 +46,50 @@ class WebRtcManager(private val context: Context) {
     private val addedIceCandidates = mutableSetOf<String>()
     private var processedRemoteSdp: String? = null
 
-    // Nahan radio WiFi & CPU tetap nyala selama koneksi P2P aktif, biar ga
-    // diputus sama power-saving pas layar mati / app di-background.
-    // WAJIB di-release() pas close(), kalau kelupaan bisa nguras baterai.
+    // [ORBIT FIX]
+    private val wifiLockMode =
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
+            WifiManager.WIFI_MODE_FULL_LOW_LATENCY
+        else
+            WifiManager.WIFI_MODE_FULL_HIGH_PERF
     private val wifiLock: WifiManager.WifiLock = (context.applicationContext
         .getSystemService(Context.WIFI_SERVICE) as WifiManager)
-        .createWifiLock(WifiManager.WIFI_MODE_FULL_HIGH_PERF, "orbit:transfer")
+        .createWifiLock(wifiLockMode, "orbit:transfer")
+
     private val wakeLock: PowerManager.WakeLock = (context.applicationContext
         .getSystemService(Context.POWER_SERVICE) as PowerManager)
         .newWakeLock(PowerManager.PARTIAL_WAKE_LOCK, "orbit:transfer")
+
+    private val scope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+    private var idleWatcherJob: Job? = null
+    private var lastActivityAt = System.currentTimeMillis()
+
+    companion object {
+        private val WAKE_LOCK_BURST = 60.seconds
+        private val IDLE_DISCONNECT_TIMEOUT = 10.minutes
+    }
+
+    fun markActivity() {
+        lastActivityAt = System.currentTimeMillis()
+        wakeLock.acquire(WAKE_LOCK_BURST.inWholeMilliseconds)
+    }
+
+    private fun startIdleWatcher() {
+        idleWatcherJob?.cancel()
+        idleWatcherJob = scope.launch {
+            while (true) {
+                kotlinx.coroutines.delay(60.seconds)
+                if (dataChannel?.state() != DataChannel.State.OPEN) continue
+                val idleFor = System.currentTimeMillis() - lastActivityAt
+                if (idleFor >= IDLE_DISCONNECT_TIMEOUT.inWholeMilliseconds) {
+                    Log.d(TAG, "Koneksi nganggur ${idleFor}ms, auto-disconnect buat hemat baterai.")
+                    closeConnection()
+                    return@launch
+                }
+            }
+        }
+    }
+    // [END ORBIT FIX]
 
     var onDataReceived: ((String) -> Unit)? = null
     var onBinaryReceived: ((ByteArray) -> Unit)? = null
@@ -141,12 +184,28 @@ class WebRtcManager(private val context: Context) {
     // 1. Inisialisasi PeerConnection & ICE Server (Google STUN)
     fun createPeerConnection(targetDeviceId: String, myDeviceId: String, isInitiator: Boolean) {
         if (!wifiLock.isHeld) wifiLock.acquire()
-        if (!wakeLock.isHeld) wakeLock.acquire(10 * 60 * 1000L)
+        // [ORBIT FIX]
+        markActivity()
+        // [END ORBIT FIX]
 
+        // [ORBIT FIX]
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
-            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer()
+            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+            PeerConnection.IceServer.builder("turn:openrelay.metered.ca:80")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer(),
+            PeerConnection.IceServer.builder("turn:openrelay.metered.ca:443")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer(),
+            PeerConnection.IceServer.builder("turn:openrelay.metered.ca:443?transport=tcp")
+                .setUsername("openrelayproject")
+                .setPassword("openrelayproject")
+                .createIceServer()
         )
+        // [END ORBIT FIX]
 
         val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
@@ -242,9 +301,18 @@ class WebRtcManager(private val context: Context) {
             override fun onBufferedAmountChange(p0: Long) {}
             override fun onStateChange() {
                 Log.d(TAG, "DataChannel State: ${dataChannel?.state()}")
+                // [ORBIT FIX]
+                if (dataChannel?.state() == DataChannel.State.OPEN) {
+                    markActivity()
+                    startIdleWatcher()
+                }
+                // [END ORBIT FIX]
             }
 
             override fun onMessage(buffer: DataChannel.Buffer) {
+                // [ORBIT FIX]
+                markActivity()
+                // [END ORBIT FIX]
                 val data = buffer.data
                 val bytes = ByteArray(data.remaining())
                 data.get(bytes)
@@ -261,9 +329,11 @@ class WebRtcManager(private val context: Context) {
         })
     }
 
-    // 2. Kirim Pesan Teks / Clipboard via DataChannel
     fun sendData(text: String) {
         if (dataChannel?.state() == DataChannel.State.OPEN) {
+            // [ORBIT FIX]
+            markActivity()
+            // [END ORBIT FIX]
             val buffer = ByteBuffer.wrap(text.toByteArray(Charsets.UTF_8))
             dataChannel?.send(DataChannel.Buffer(buffer, false))
             Log.d(TAG, "Berhasil kirim data via DataChannel!")
@@ -277,6 +347,9 @@ class WebRtcManager(private val context: Context) {
             Log.e(TAG, "DataChannel belum OPEN! State saat ini: ${dataChannel?.state()}")
             return
         }
+        // [ORBIT FIX]
+        markActivity()
+        // [END ORBIT FIX]
 
         val json = JSONObject().apply {
             put("type", "clipboard")
@@ -293,15 +366,17 @@ class WebRtcManager(private val context: Context) {
     }
 
     private fun createOffer(targetDeviceId: String, myDeviceId: String) {
+        val uid = auth.currentUser?.uid ?: return
+        val callPath = "calls/$uid/${myDeviceId}_to_${targetDeviceId}"
+        db.getReference(callPath).setValue(null)
+
         val constraints = MediaConstraints()
         peerConnection?.createOffer(object : SdpObserver {
             override fun onCreateSuccess(sdp: SessionDescription?) {
                 sdp?.let {
                     peerConnection?.setLocalDescription(this, it)
-                    val uid = auth.currentUser?.uid ?: return
-                    val callPath = "calls/$uid/${myDeviceId}_to_${targetDeviceId}"
-                    db.getReference(callPath).setValue(
-                        mapOf("offer" to mapOf("type" to "offer", "sdp" to it.description))
+                    db.getReference(callPath).child("offer").setValue(
+                        mapOf("type" to "offer", "sdp" to it.description)
                     )
                     listenForAnswer(targetDeviceId, myDeviceId)
                 }
@@ -414,6 +489,9 @@ class WebRtcManager(private val context: Context) {
 
     fun sendBinary(bytes: ByteArray): Boolean {
         if (dataChannel?.state() == DataChannel.State.OPEN) {
+            // [ORBIT FIX]
+            markActivity()
+            // [END ORBIT FIX]
             val buffer = ByteBuffer.wrap(bytes)
             return dataChannel?.send(DataChannel.Buffer(buffer, true)) ?: false
         }
@@ -435,6 +513,9 @@ class WebRtcManager(private val context: Context) {
 
     fun closeConnection() {
         try {
+            // [ORBIT FIX]
+            idleWatcherJob?.cancel()
+            // [END ORBIT FIX]
             if (wifiLock.isHeld) wifiLock.release()
             if (wakeLock.isHeld) wakeLock.release()
             addedIceCandidates.clear()
@@ -466,6 +547,9 @@ class WebRtcManager(private val context: Context) {
 
     fun close() {
         try {
+            // [ORBIT FIX]
+            idleWatcherJob?.cancel()
+            // [END ORBIT FIX]
             if (wifiLock.isHeld) wifiLock.release()
             if (wakeLock.isHeld) wakeLock.release()
             addedIceCandidates.clear()

@@ -70,6 +70,7 @@ class MainActivity : ComponentActivity() {
                 }
                 if (uri != null) listOf(uri) else emptyList()
             }
+
             Intent.ACTION_SEND_MULTIPLE -> {
                 val uris = if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                     intent.getParcelableArrayListExtra(Intent.EXTRA_STREAM, Uri::class.java)
@@ -79,6 +80,7 @@ class MainActivity : ComponentActivity() {
                 }
                 uris ?: emptyList()
             }
+
             else -> emptyList()
         }
     }
@@ -141,11 +143,17 @@ class MainActivity : ComponentActivity() {
                                 when (json.getString("type")) {
                                     "clipboard" -> {
                                         val payload = json.getString("payload")
-                                        val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                                        val clipboard =
+                                            getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                                         val clip = ClipData.newPlainText("Orbit clipboard", payload)
                                         clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(context, "Clipboard tersinkron dari pc", Toast.LENGTH_SHORT).show()
+                                        Toast.makeText(
+                                            context,
+                                            "Clipboard tersinkron dari pc",
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
+
                                     "file-meta" -> {
                                         val fileName = json.getString("name")
                                         val fileSize = json.optLong("size", 0L)
@@ -156,38 +164,84 @@ class MainActivity : ComponentActivity() {
                                         try {
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                                 val values = ContentValues().apply {
-                                                    put(MediaStore.MediaColumns.DISPLAY_NAME, fileName)
-                                                    put(MediaStore.MediaColumns.RELATIVE_PATH, Environment.DIRECTORY_DOWNLOADS)
+                                                    put(
+                                                        MediaStore.MediaColumns.DISPLAY_NAME,
+                                                        fileName
+                                                    )
+                                                    put(
+                                                        MediaStore.MediaColumns.RELATIVE_PATH,
+                                                        Environment.DIRECTORY_DOWNLOADS
+                                                    )
                                                 }
-                                                val fileUri = context.contentResolver.insert(MediaStore.Downloads.EXTERNAL_CONTENT_URI, values)
-                                                currentOutputStream = fileUri?.let { context.contentResolver.openOutputStream(it) }
+                                                val fileUri = context.contentResolver.insert(
+                                                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
+                                                    values
+                                                )
+                                                currentOutputStream = fileUri?.let {
+                                                    context.contentResolver.openOutputStream(it)
+                                                }
                                             } else {
                                                 @Suppress("DEPRECATION")
-                                                val downloadDir = Environment.getExternalStoragePublicDirectory(Environment.DIRECTORY_DOWNLOADS)
+                                                val downloadDir =
+                                                    Environment.getExternalStoragePublicDirectory(
+                                                        Environment.DIRECTORY_DOWNLOADS
+                                                    )
                                                 val file = File(downloadDir, fileName)
                                                 currentOutputStream = FileOutputStream(file)
                                             }
                                             currentDownloadName = fileName
-                                            NotificationHelper.showTransferProgress(context, currentDownloadNotifId, fileName, 0, false)
+                                            NotificationHelper.showTransferProgress(
+                                                context,
+                                                currentDownloadNotifId,
+                                                fileName,
+                                                0,
+                                                false
+                                            )
                                         } catch (e: Exception) {
-                                            Log.e("MainActivity", "Gagal siapkan download: ${e.message}")
-                                            NotificationHelper.showTransferResult(context, currentDownloadNotifId, fileName, false, false, "Gagal menyiapkan file: ${e.message}")
+                                            Log.e(
+                                                "MainActivity",
+                                                "Gagal siapkan download: ${e.message}"
+                                            )
+                                            NotificationHelper.showTransferResult(
+                                                context,
+                                                currentDownloadNotifId,
+                                                fileName,
+                                                false,
+                                                false,
+                                                "Gagal menyiapkan file: ${e.message}"
+                                            )
                                         }
                                     }
+
                                     "file-complete" -> {
                                         val fileName = currentDownloadName ?: "file"
                                         try {
                                             currentOutputStream?.flush()
                                             currentOutputStream?.close()
                                             currentOutputStream = null
-                                            NotificationHelper.showTransferResult(context, currentDownloadNotifId, fileName, false, true)
+                                            NotificationHelper.showTransferResult(
+                                                context,
+                                                currentDownloadNotifId,
+                                                fileName,
+                                                false,
+                                                true
+                                            )
                                         } catch (e: Exception) {
-                                            Log.e("MainActivity", "Gagal finalisasi file: ${e.message}")
-                                            NotificationHelper.showTransferResult(context, currentDownloadNotifId, fileName, false, false, e.message)
+                                            Log.e(
+                                                "MainActivity",
+                                                "Gagal finalisasi file: ${e.message}"
+                                            )
+                                            NotificationHelper.showTransferResult(
+                                                context,
+                                                currentDownloadNotifId,
+                                                fileName,
+                                                false,
+                                                false,
+                                                e.message
+                                            )
                                         }
                                         currentDownloadName = null
-                                        webRtcManager.closeConnection()
-                                        OrbitRuntime.setActiveConnection(null)
+                                        // [ORBIT FIX]
                                     }
                                 }
                             } catch (e: Exception) {
@@ -201,10 +255,18 @@ class MainActivity : ComponentActivity() {
                                 currentOutputStream?.write(bytes)
                                 currentDownloadBytesReceived += bytes.size
                                 if (currentDownloadTotalSize > 0) {
-                                    val percent = ((currentDownloadBytesReceived * 100) / currentDownloadTotalSize).toInt().coerceIn(0, 100)
+                                    val percent =
+                                        ((currentDownloadBytesReceived * 100) / currentDownloadTotalSize).toInt()
+                                            .coerceIn(0, 100)
                                     if (percent != lastReportedPercent) {
                                         lastReportedPercent = percent
-                                        NotificationHelper.showTransferProgress(context, currentDownloadNotifId, currentDownloadName ?: "file", percent, false)
+                                        NotificationHelper.showTransferProgress(
+                                            context,
+                                            currentDownloadNotifId,
+                                            currentDownloadName ?: "file",
+                                            percent,
+                                            false
+                                        )
                                     }
                                 }
                             } catch (e: Exception) {
@@ -227,10 +289,15 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             try {
                                 authManager.firebaseAuthWithGoogleSignInResult(result.data)
-                                Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT).show()
+                                Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT)
+                                    .show()
                             } catch (e: Exception) {
                                 Log.e("MainActivity", "Login Google gagal: ${e.message}")
-                                Toast.makeText(context, "Login gagal: ${e.message}", Toast.LENGTH_LONG).show()
+                                Toast.makeText(
+                                    context,
+                                    "Login gagal: ${e.message}",
+                                    Toast.LENGTH_LONG
+                                ).show()
                             }
                         }
                     }
@@ -280,7 +347,8 @@ class MainActivity : ComponentActivity() {
                         )
                     }
                     if (pendingShareUris.isNotEmpty()) {
-                        val onlineDevices = otherDevices.filter { it.status.lowercase() == "online" }
+                        val onlineDevices =
+                            otherDevices.filter { it.status.lowercase() == "online" }
                         AlertDialog(
                             onDismissRequest = { pendingShareUris = emptyList() },
                             title = { Text("Upload to device?") },
@@ -291,11 +359,20 @@ class MainActivity : ComponentActivity() {
                                     } else {
                                         onlineDevices.forEach { device ->
                                             Surface(
-                                                modifier = Modifier.fillMaxWidth().clickable {
-                                                    val uris = pendingShareUris
-                                                    pendingShareUris = emptyList()
-                                                    scope.launch { sendFilesToDevice(context, device, uris) }
-                                                }.padding(vertical = 12.dp)
+                                                modifier = Modifier
+                                                    .fillMaxWidth()
+                                                    .clickable {
+                                                        val uris = pendingShareUris
+                                                        pendingShareUris = emptyList()
+                                                        scope.launch {
+                                                            sendFilesToDevice(
+                                                                context,
+                                                                device,
+                                                                uris
+                                                            )
+                                                        }
+                                                    }
+                                                    .padding(vertical = 12.dp)
                                             ) {
                                                 Text(device.deviceName)
                                             }
@@ -305,7 +382,9 @@ class MainActivity : ComponentActivity() {
                             },
                             confirmButton = {},
                             dismissButton = {
-                                Surface(modifier = Modifier.clickable { pendingShareUris = emptyList() }) {
+                                Surface(modifier = Modifier.clickable {
+                                    pendingShareUris = emptyList()
+                                }) {
                                     Text("Batal", modifier = Modifier.padding(8.dp))
                                 }
                             }
@@ -333,7 +412,13 @@ class MainActivity : ComponentActivity() {
             authManager.handleDeepLinkIntent(
                 uri = uri,
                 onSucess = { Toast.makeText(this, "Login Berhasil!", Toast.LENGTH_SHORT).show() },
-                onError = { e -> Toast.makeText(this, "Login Gagal: ${e.message}", Toast.LENGTH_LONG).show() }
+                onError = { e ->
+                    Toast.makeText(
+                        this,
+                        "Login Gagal: ${e.message}",
+                        Toast.LENGTH_LONG
+                    ).show()
+                }
             )
         }
     }
@@ -344,12 +429,27 @@ private suspend fun sendFilesToDevice(context: Context, targetDevice: Device, ur
     val connectNotifId = NotificationHelper.newTransferId()
     try {
         if (!webRtcManager.isDataChannelOpen()) {
-            Toast.makeText(context, "Menyambungkan ke ${targetDevice.deviceName}...", Toast.LENGTH_SHORT).show()
+            Toast.makeText(
+                context,
+                "Menyambungkan ke ${targetDevice.deviceName}...",
+                Toast.LENGTH_SHORT
+            ).show()
             OrbitRuntime.setActiveConnection(targetDevice.id)
-            webRtcManager.createPeerConnection(targetDevice.id, OrbitRuntime.orbitPresence.deviceId, true)
+            webRtcManager.createPeerConnection(
+                targetDevice.id,
+                OrbitRuntime.orbitPresence.deviceId,
+                true
+            )
             val connected = webRtcManager.awaitDataChannelOpen()
             if (!connected) {
-                NotificationHelper.showTransferResult(context, connectNotifId, if (uris.size == 1) "file" else "${uris.size} file", true, false, "Gagal konek ke ${targetDevice.deviceName}")
+                NotificationHelper.showTransferResult(
+                    context,
+                    connectNotifId,
+                    if (uris.size == 1) "file" else "${uris.size} file",
+                    true,
+                    false,
+                    "Gagal konek ke ${targetDevice.deviceName}"
+                )
                 OrbitRuntime.setActiveConnection(null)
                 return
             }
@@ -381,17 +481,28 @@ private suspend fun sendFilesToDevice(context: Context, targetDevice: Device, ur
                     val buffer = ByteArray(16384)
                     var bytesRead: Int
                     while (inputStream.read(buffer).also { bytesRead = it } != -1) {
-                        val chunk = if (bytesRead == buffer.size) buffer else buffer.copyOf(bytesRead)
+                        val chunk =
+                            if (bytesRead == buffer.size) buffer else buffer.copyOf(bytesRead)
                         webRtcManager.sendBinary(chunk)
                         bytesSent += bytesRead
+
+                        // [ORBIT FIX]
                         while (webRtcManager.getBufferedAmount() > 256 * 1024) {
                             kotlinx.coroutines.delay(10.milliseconds)
                         }
+                        // [END ORBIT FIX]
+
                         if (fileSize > 0) {
                             val percent = ((bytesSent * 100) / fileSize).toInt().coerceIn(0, 100)
                             if (percent != lastReportedPercent) {
                                 lastReportedPercent = percent
-                                NotificationHelper.showTransferProgress(context, notifId, fileName, percent, true)
+                                NotificationHelper.showTransferProgress(
+                                    context,
+                                    notifId,
+                                    fileName,
+                                    percent,
+                                    true
+                                )
                             }
                         }
                     }
@@ -401,12 +512,18 @@ private suspend fun sendFilesToDevice(context: Context, targetDevice: Device, ur
                 NotificationHelper.showTransferResult(context, notifId, fileName, true, true)
             } catch (e: Exception) {
                 Log.e("MainActivity", "Gagal kirim '$fileName': ${e.message}")
-                NotificationHelper.showTransferResult(context, notifId, fileName, true, false, e.message)
+                NotificationHelper.showTransferResult(
+                    context,
+                    notifId,
+                    fileName,
+                    true,
+                    false,
+                    e.message
+                )
             }
         }
         webRtcManager.awaitBufferedAmountDrained()
-        webRtcManager.closeConnection()
-        OrbitRuntime.setActiveConnection(null)
+        // [ORBIT FIX]
     } catch (e: Exception) {
         Log.e("MainActivity", "Gagal kirim file: ${e.message}")
         webRtcManager.closeConnection()
@@ -419,10 +536,18 @@ private suspend fun sendClipboardToDevice(context: Context, targetDevice: Device
     try {
         if (!webRtcManager.isDataChannelOpen()) {
             OrbitRuntime.setActiveConnection(targetDevice.id)
-            webRtcManager.createPeerConnection(targetDevice.id, OrbitRuntime.orbitPresence.deviceId, true)
+            webRtcManager.createPeerConnection(
+                targetDevice.id,
+                OrbitRuntime.orbitPresence.deviceId,
+                true
+            )
             val connected = webRtcManager.awaitDataChannelOpen()
             if (!connected) {
-                Toast.makeText(context, "Gagal konek ke ${targetDevice.deviceName}", Toast.LENGTH_LONG).show()
+                Toast.makeText(
+                    context,
+                    "Gagal konek ke ${targetDevice.deviceName}",
+                    Toast.LENGTH_LONG
+                ).show()
                 OrbitRuntime.setActiveConnection(null)
                 return
             }
@@ -430,8 +555,7 @@ private suspend fun sendClipboardToDevice(context: Context, targetDevice: Device
         webRtcManager.sendClipboard(text)
         Toast.makeText(context, "Clipboard terkirim!", Toast.LENGTH_SHORT).show()
         webRtcManager.awaitBufferedAmountDrained()
-        webRtcManager.closeConnection()
-        OrbitRuntime.setActiveConnection(null)
+        // [ORBIT FIX]
     } catch (e: Exception) {
         Log.e("MainActivity", "Gagal kirim clipboard: ${e.message}")
         webRtcManager.closeConnection()

@@ -76,7 +76,7 @@ class OrbitConnectionService : Service() {
             OrbitRuntime.updateDevice(devices)
 
             val currentlyOnlineIds = devices
-                .filter { it.status.lowercase() == "kotlin" }
+                .filter { it.status.lowercase() == "online" }
                 .map { it.id }
                 .toSet()
 
