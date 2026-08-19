@@ -1,48 +1,112 @@
+/**
+ * WebRTCService — orkestrator utama koneksi P2P Orbit di PC.
+ *
+ * Tanggung jawabnya CUMA: ngatur siklus hidup satu `RTCPeerConnection` +
+ * `RTCDataChannel` (bikin, negosiasi, jaga statusnya, tutup), dan
+ * ngirim/nerima file & clipboard lewat data channel itu. Detail-detail
+ * lain sengaja dipisah ke modul sendiri supaya file ini gampang dibaca
+ * dari atas ke bawah:
+ *
+ *   - `iceConfig.ts`            → daftar STUN/TURN server
+ *   - `iceWatchdog.ts`          → kapan ICE dianggap "macet"/"gagal"
+ *   - `signaling.ts`            → baca/tulis SDP & ICE candidate ke Firebase
+ *   - `fileTransferProtocol.ts` → format pesan kirim/terima file
+ *   - `types.ts`                → tipe-tipe yang dipakai bareng
+ *
+ * ALUR KONEKSI SINGKATNYA (baca ini dulu sebelum ubah kode di bawah):
+ *
+ *   Device A (createOffer)                    Device B (listenForIncomingCalls)
+ *   ───────────────────────                    ─────────────────────────────
+ *   1. Bikin RTCPeerConnection + data channel
+ *   2. createOffer() + setLocalDescription()
+ *   3. Tulis offer ke Firebase          ────▶  4. Denger offer baru masuk
+ *                                               5. answerCall(): bikin
+ *                                                  RTCPeerConnection sendiri,
+ *                                                  setRemoteDescription(offer)
+ *                                               6. createAnswer() + setLocal
+ *                                        ◀────  7. Tulis answer ke Firebase
+ *   8. Denger answer masuk,
+ *      setRemoteDescription(answer)
+ *   9. ICE candidate ditukar dua arah lewat Firebase selama proses ini
+ *      (trickle ICE — dikirim begitu ketemu, ga nunggu gathering selesai)
+ *   10. RTCDataChannel.onopen() nyala di kedua sisi → BARU dianggap
+ *       "beneran konek" (lihat NegotiationState di types.ts kenapa ini
+ *       dipisah dari status ICE)
+ *
+ * Kalau mau nambah fitur baru yang butuh "tau kapan device lain
+ * kekirim data" — pasang di `setupDataChannelHandlers()`. Kalau mau
+ * ubah CARA dua device saling ketemu (ganti dari Firebase) — itu
+ * tugasnya `signaling.ts`, bukan file ini.
+ */
+
 import {
-  child,
-  DataSnapshot,
-  onChildAdded,
-  onChildChanged,
-  onValue,
-  push,
-  ref,
-  set,
-} from "firebase/database";
-import { db } from "../firebase/firebase";
+  BACKPRESSURE_THRESHOLD_BYTES,
+  buildFileMetaMessage,
+  CHUNK_SIZE_BYTES,
+  extractClipboardText,
+  FILE_COMPLETE_MESSAGE,
+} from "./webRtc/fileTransferProtocol";
+import { rtcConfiguration } from "./webRtc/iceConfig";
+import { IceWatchdog } from "./webRtc/iceWatchdog";
+import {
+  buildCallId,
+  listenForAnswer,
+  listenForAnswerCandidates,
+  listenForIncomingOffers,
+  listenForOfferCandidates,
+  pushAnswerCandidate,
+  pushOfferCandidate,
+  writeAnswer,
+  writeOffer,
+} from "./webRtc/signaling";
+import type {
+  IncomingFileMeta,
+  NegotiationState,
+  WebRTCEventHandlers,
+} from "./webRtc/types";
 
-const configuration: RTCConfiguration = {
-  iceServers: [
-    { urls: "stun:stun.l.google.com:19302" },
-    { urls: "stun:stun1.l.google.com:19302" },
-  ],
-  // Pre-gather ICE candidates sebelum offer/answer dibuat, jadi kandidat
-  // langsung siap dikirim begitu negosiasi mulai — mempercepat handshake.
-  iceCandidatePoolSize: 10,
-};
+export type { IncomingFileMeta } from "./webRtc/types";
 
-interface IncomingFileMeta {
-  name: string;
-  size: number;
-  mimeType: string;
-}
-
-class WebRTCService {
+class WebRTCService implements WebRTCEventHandlers {
+  // ---- Koneksi aktif saat ini -------------------------------------------
   private peerConnection: RTCPeerConnection | null = null;
   private dataChannel: RTCDataChannel | null = null;
+  private activeCallId: string | null = null;
+  private iceWatchdog = new IceWatchdog();
+
+  /**
+   * Status kasar negosiasi (lihat `NegotiationState` di types.ts).
+   * Sumber kebenaran buat `canAttemptReconnect()`.
+   */
+  private negotiationState: NegotiationState = "idle";
+
+  /**
+   * Lagi ada transfer file aktif (kirim ATAU terima) atau enggak.
+   * Selama ini `true`, TIDAK ADA yang boleh menutup/mengganti
+   * peerConnection yang sedang aktif — reconnect di tengah transfer
+   * cuma bakal motong data yang lagi mengalir. Lihat pemakaiannya di
+   * `createOffer()`, `answerCall()`, `canAttemptReconnect()`, dan
+   * grace period `IceWatchdog`.
+   */
+  private isTransferring = false;
+
+  /** Buat lepas listener Firebase punya sesi call yang lagi aktif (offer/answer/candidates). */
+  private stopCallSignalListeners: Array<() => void> = [];
+  /** Buat lepas listener "ada panggilan masuk" — beda siklus hidup dari yang di atas. */
+  private stopIncomingCallsListener: (() => void) | null = null;
+
+  // ---- State penerimaan file yang lagi berlangsung -----------------------
   private incomingMeta: IncomingFileMeta | null = null;
   private incomingChunks: ArrayBuffer[] = [];
-  private callSignalUnsubscribes: Array<() => void> = [];
-  private activeCallId: string | null = null;
+  private incomingBytesReceived = 0;
+  private lastReceivedPercent = -1;
 
-  // Callback buat UI (HomePage) nampilin status ke user — INI YANG SEBELUMNYA
-  // GA ADA, makanya kirim/gagal ga ada pemberitahuan sama sekali.
+  // ---- Callback yang dipasang UI ------------------------------------------
   public onConnectionOpen?: () => void;
+  public onConnectionStateChange?: (connected: boolean) => void;
   public onFileReceived?: (file: Blob, meta: IncomingFileMeta) => void;
   public onClipboardReceived?: (text: string) => void;
   public onError?: (message: string) => void;
-
-  public onConnectionStateChange?: (connected: boolean) => void;
-
   public onSendProgress?: (fileName: string, percent: number) => void;
   public onSendComplete?: (
     fileName: string,
@@ -56,37 +120,313 @@ class WebRTCService {
     error?: string,
   ) => void;
 
-  private incomingBytesReceived = 0;
-  private lastReceivedPercent = -1;
+  // =========================================================================
+  // Query status — dipakai UI buat nampilin indikator & mutusin auto-reconnect
+  // =========================================================================
 
-  private handledOffers = new Map<string, string>();
-  private incomingCallUnsubscribes: Array<() => void> = [];
-
-  private negotiationState: "idle" | "connecting" | "connected" | "failed" =
-    "idle";
-
-  private isTransferring = false;
-
-  // Watchdog untuk ICE "checking" yang tersangkut dan grace period untuk
-  // status "disconnected" yang biasanya hanya gangguan jaringan sesaat.
-  private checkingWatchdogTimer: number | null = null;
-  private disconnectGraceTimer: number | null = null;
-
-  private clearIceWatchdogs() {
-    if (this.checkingWatchdogTimer !== null) {
-      window.clearTimeout(this.checkingWatchdogTimer);
-      this.checkingWatchdogTimer = null;
-    }
-    if (this.disconnectGraceTimer !== null) {
-      window.clearTimeout(this.disconnectGraceTimer);
-      this.disconnectGraceTimer = null;
-    }
+  /** Data channel P2P beneran kebuka & siap kirim/terima data. */
+  public isConnected(): boolean {
+    return this.dataChannel?.readyState === "open";
   }
 
-  private clearCallSignalListeners() {
-    this.callSignalUnsubscribes.forEach((unsubscribe) => unsubscribe());
-    this.callSignalUnsubscribes = [];
+  /**
+   * "Boleh gak gue coba connect ulang sekarang?" — dipakai auto-reconnect
+   * interval di UI. `false` dalam 3 kondisi:
+   *   1. Lagi ada transfer file aktif (jangan diganggu).
+   *   2. Udah konek (gak perlu reconnect).
+   *   3. Lagi proses connecting/checking (kasih kesempatan selesai dulu,
+   *      jangan dipotong & diulang dari nol).
+   */
+  public canAttemptReconnect(): boolean {
+    if (this.isTransferring) return false;
+    if (this.isConnected()) return false;
+    return this.negotiationState !== "connecting";
   }
+
+  /** Nunggu sampai data channel `"open"`, atau reject kalau timeout/ketutup. */
+  public async waitForConnection(timeoutMs = 15_000): Promise<void> {
+    if (this.isConnected()) return;
+
+    const channel = this.dataChannel;
+    if (!channel || channel.readyState === "closed") {
+      throw new Error("Koneksi P2P belum dibuat.");
+    }
+
+    await new Promise<void>((resolve, reject) => {
+      const pollInterval = window.setInterval(() => {
+        if (channel.readyState === "open") {
+          cleanup();
+          resolve();
+        } else if (channel.readyState === "closed") {
+          cleanup();
+          reject(new Error("Koneksi P2P tertutup."));
+        }
+      }, 100);
+      const timeout = window.setTimeout(() => {
+        cleanup();
+        reject(new Error("Waktu tunggu koneksi P2P habis."));
+      }, timeoutMs);
+      const cleanup = () => {
+        window.clearInterval(pollInterval);
+        window.clearTimeout(timeout);
+      };
+    });
+  }
+
+  // =========================================================================
+  // Memulai / menjawab panggilan
+  // =========================================================================
+
+  /**
+   * Mulai koneksi P2P ke `targetDeviceId` (kita jadi pihak yang bikin
+   * offer). Aman dipanggil berkali-kali — ada 3 guard yang bikin ini
+   * jadi no-op kalau gak perlu:
+   *
+   *   - Lagi ada transfer aktif → selalu ditolak, TERMASUK kalau `force`.
+   *     Reconnect paksa di tengah transfer gak masuk akal.
+   *   - Lagi proses connecting → ditolak kecuali `force`, biar proses
+   *     yang jalan gak keputus percuma.
+   *   - Udah ada koneksi aktif & sehat ke device yang sama → ditolak
+   *     kecuali `force`, biar gak bikin ulang dari nol tanpa alasan.
+   *
+   * @param force - Lewatin guard "lagi connecting" & "udah konek ke
+   *   device yang sama". Dipakai tombol "reconnect manual" di UI.
+   *   TETAP gak bisa lewatin guard "lagi transfer aktif".
+   */
+  public async createOffer(
+    userId: string,
+    targetDeviceId: string,
+    myDeviceId: string,
+    force = false,
+  ): Promise<void> {
+    if (this.isTransferring) return;
+
+    const callId = buildCallId(myDeviceId, targetDeviceId);
+    const alreadyActiveToSameDevice =
+      this.activeCallId === callId &&
+      (this.dataChannel?.readyState === "connecting" ||
+        this.dataChannel?.readyState === "open");
+
+    if (!force && this.negotiationState === "connecting") return;
+    if (!force && alreadyActiveToSameDevice) return;
+
+    const peerConnection = this.startFreshPeerConnection(callId);
+    this.dataChannel = peerConnection.createDataChannel("orbit-transfer");
+    this.setupDataChannelHandlers();
+
+    peerConnection.onicecandidate = ({ candidate }) => {
+      // .toJSON() WAJIB: RTCIceCandidate itu instance class (ada getter,
+      // bukan object polos), Firebase set() butuh data yang bisa
+      // di-serialize jadi JSON biasa.
+      if (candidate)
+        void pushOfferCandidate(userId, callId, candidate.toJSON());
+    };
+
+    const offer = await peerConnection.createOffer();
+    await peerConnection.setLocalDescription(offer);
+    await writeOffer(userId, callId, offer);
+
+    this.listenForAnswerAndCandidates(userId, callId, peerConnection);
+  }
+
+  /**
+   * Dengerin panggilan masuk (device lain bikin offer ke kita) dan
+   * otomatis jawab. Panggil ini SEKALI aja pas app mulai & user udah
+   * login — jangan nunggu user pilih device dulu, supaya PC selalu
+   * siap "ngangkat telepon" kapan aja.
+   *
+   * Aman dipanggil berkali-kali (mis. React StrictMode yang nge-run
+   * effect dua kali di dev mode): listener lama otomatis dilepas dulu
+   * sebelum yang baru dipasang, jadi gak numpuk.
+   */
+  public listenForIncomingCalls(userId: string, myDeviceId: string) {
+    this.stopIncomingCallsListener?.();
+    this.stopIncomingCallsListener = listenForIncomingOffers(
+      userId,
+      myDeviceId,
+      (callId, offer) => {
+        void this.answerIncomingCall(userId, callId, offer);
+      },
+    );
+  }
+
+  /** Jawab satu offer yang masuk: bikin RTCPeerConnection sendiri, balas dengan answer. */
+  private async answerIncomingCall(
+    userId: string,
+    callId: string,
+    offer: RTCSessionDescriptionInit,
+  ): Promise<void> {
+    // Sama kayak createOffer(): jangan nyambut panggilan baru (yang
+    // bakal nutup peerConnection sekarang) kalau lagi ada transfer aktif.
+    if (this.isTransferring) return;
+
+    const peerConnection = this.startFreshPeerConnection(callId);
+
+    peerConnection.ondatachannel = (event) => {
+      this.dataChannel = event.channel;
+      this.setupDataChannelHandlers();
+    };
+    peerConnection.onicecandidate = ({ candidate }) => {
+      // .toJSON() WAJIB — lihat catatan di createOffer() di atas.
+      if (candidate)
+        void pushAnswerCandidate(userId, callId, candidate.toJSON());
+    };
+
+    await peerConnection.setRemoteDescription(offer);
+    const answer = await peerConnection.createAnswer();
+    await peerConnection.setLocalDescription(answer);
+    await writeAnswer(userId, callId, answer);
+
+    this.stopCallSignalListeners.push(
+      listenForOfferCandidates(userId, callId, (candidate) => {
+        if (this.peerConnection === peerConnection) {
+          void peerConnection.addIceCandidate(candidate);
+        }
+      }),
+    );
+  }
+
+  /**
+   * Bagian yang SAMA antara `createOffer()` dan `answerIncomingCall()`:
+   * tutup koneksi lama (kalau ada), bikin `RTCPeerConnection` baru,
+   * dan pasang pelacakan status ICE-nya. Dipanggil di awal kedua alur
+   * di atas supaya gak ada duplikasi setup.
+   */
+  private startFreshPeerConnection(callId: string): RTCPeerConnection {
+    this.negotiationState = "connecting";
+    this.stopCallSignalListeners.forEach((unsubscribe) => unsubscribe());
+    this.stopCallSignalListeners = [];
+    this.iceWatchdog.clear();
+    this.peerConnection?.close();
+
+    const peerConnection = new RTCPeerConnection(rtcConfiguration);
+    this.peerConnection = peerConnection;
+    this.activeCallId = callId;
+    this.trackIceConnectionState(peerConnection);
+    return peerConnection;
+  }
+
+  /**
+   * Sisi `createOffer()` doang: setelah offer ditulis, dengerin balasan
+   * `answer` + ICE candidate dari lawan bicara. Candidate yang datang
+   * SEBELUM `setRemoteDescription(answer)` selesai ditampung dulu di
+   * `pendingAnswerCandidates` (browser gak mau `addIceCandidate()`
+   * sebelum remote description ke-set).
+   */
+  private listenForAnswerAndCandidates(
+    userId: string,
+    callId: string,
+    peerConnection: RTCPeerConnection,
+  ) {
+    let isApplyingAnswer = false;
+    const pendingCandidates: RTCIceCandidateInit[] = [];
+
+    const addCandidateNow = async (candidate: RTCIceCandidateInit) => {
+      if (!peerConnection.remoteDescription) {
+        pendingCandidates.push(candidate);
+        return;
+      }
+      try {
+        await peerConnection.addIceCandidate(candidate);
+      } catch (error) {
+        console.error("Gagal menambahkan ICE candidate answer:", error);
+      }
+    };
+
+    this.stopCallSignalListeners.push(
+      listenForAnswer(userId, callId, async (answer) => {
+        const isStaleEvent =
+          isApplyingAnswer ||
+          this.peerConnection !== peerConnection ||
+          peerConnection.signalingState !== "have-local-offer";
+        if (isStaleEvent) return;
+
+        isApplyingAnswer = true;
+        try {
+          await peerConnection.setRemoteDescription(answer);
+          await Promise.all(pendingCandidates.splice(0).map(addCandidateNow));
+        } catch (error) {
+          console.error("Gagal menerapkan WebRTC answer:", error);
+          this.onError?.("Gagal menyambungkan perangkat.");
+        } finally {
+          isApplyingAnswer = false;
+        }
+      }),
+    );
+
+    this.stopCallSignalListeners.push(
+      listenForAnswerCandidates(userId, callId, (candidate) => {
+        if (this.peerConnection === peerConnection) {
+          void addCandidateNow(candidate);
+        }
+      }),
+    );
+  }
+
+  // =========================================================================
+  // Pelacakan status ICE → negotiationState (pakai IceWatchdog)
+  // =========================================================================
+
+  private trackIceConnectionState(peerConnection: RTCPeerConnection) {
+    peerConnection.oniceconnectionstatechange = () => {
+      const state = peerConnection.iceConnectionState;
+      console.log("ICE state:", state);
+      if (this.peerConnection !== peerConnection) return; // koneksi lama, abaikan
+
+      this.iceWatchdog.clear(); // timer state sebelumnya udah gak relevan
+
+      switch (state) {
+        case "checking":
+          this.negotiationState = "connecting";
+          this.iceWatchdog.watchChecking(
+            () => this.peerConnection === peerConnection,
+            () => {
+              this.negotiationState = "failed";
+              this.onConnectionStateChange?.(false);
+            },
+          );
+          break;
+
+        case "connected":
+        case "completed":
+          // SENGAJA TIDAK di-set "connected" di sini. ICE connected cuma
+          // berarti jalur network-nya nyambung — data channel (SCTP)
+          // masih proses handshake terpisah setelah ini. Kalau
+          // negotiationState di-set "connected" di titik ini,
+          // canAttemptReconnect() bakal nganggep "boleh coba lagi"
+          // padahal data channel-nya BELUM open, jadi auto-reconnect
+          // bisa nutup koneksi yang hampir jadi ini sebelum sempat
+          // kebuka beneran. Biarkan tetap "connecting" sampai
+          // `channel.onopen` beneran fire (lihat setupDataChannelHandlers).
+          break;
+
+        case "disconnected":
+          // Jangan langsung nyerah — state ini sering pulih sendiri
+          // habis gangguan jaringan singkat. Grace period-nya beda
+          // kalau lagi ada transfer aktif (lihat IceWatchdog).
+          this.iceWatchdog.watchDisconnected(
+            () => this.peerConnection === peerConnection,
+            () => peerConnection.iceConnectionState === "disconnected",
+            this.isTransferring,
+            () => {
+              this.negotiationState = "failed";
+              this.onConnectionStateChange?.(false);
+            },
+          );
+          break;
+
+        case "failed":
+        case "closed":
+          this.negotiationState = "failed";
+          this.onConnectionStateChange?.(false);
+          break;
+      }
+    };
+  }
+
+  // =========================================================================
+  // Data channel: kirim & terima file/clipboard
+  // =========================================================================
 
   private setupDataChannelHandlers() {
     if (!this.dataChannel) return;
@@ -99,12 +439,14 @@ class WebRTCService {
       this.onConnectionOpen?.();
       this.onConnectionStateChange?.(true);
     };
+
     channel.onclose = () => {
       console.log("DataChannel CLOSED");
       if (this.negotiationState !== "failed") this.negotiationState = "idle";
-      this.isTransferring = false
+      this.isTransferring = false; // channel mati → transfer apapun otomatis gagal
       this.onConnectionStateChange?.(false);
     };
+
     channel.onerror = (event) => {
       const error = event.error;
       const isExpectedClose =
@@ -122,345 +464,101 @@ class WebRTCService {
       console.error("DataChannel error:", event);
       this.onError?.("Koneksi P2P terputus atau error.");
     };
-    channel.onmessage = async (event) => {
-      if (typeof event.data === "string") {
-        try {
-          const parsed = JSON.parse(event.data);
-          console.log("Pesan diterima di PC:", parsed);
 
-          if (parsed.type === "file-meta") {
-            this.incomingMeta = parsed;
-            this.incomingChunks = [];
-            this.incomingBytesReceived = 0;
-            this.lastReceivedPercent = -1;
-            this.isTransferring = true;
-            this.onReceiveProgress?.(parsed.name, 0);
-          } else if (parsed.type === "file-complete") {
-            // PENTING: sebelumnya PC nganggep "sekali dapet data biner =
-            // file selesai" — cuma cocok kalau pengirim kirim sekaligus
-            // dalam satu potongan. Mobile sekarang kirim per-chunk 16KB
-            // + sinyal "file-complete" di akhir, jadi kalau PC masih pakai
-            // logika lama, file yang diterima dari HP bakal kepotong cuma
-            // 16KB pertama doang. Sekarang PC nunggu sinyal ini dulu baru
-            // menganggap file-nya lengkap.
-            if (this.incomingMeta) {
-              const meta = this.incomingMeta;
-              const blob = new Blob(this.incomingChunks, {
-                type: meta.mimeType,
-              });
-              this.onFileReceived?.(blob, meta);
-              this.onReceiveComplete?.(meta.name, true);
-            }
-            this.incomingMeta = null;
-            this.incomingChunks = [];
-            this.incomingBytesReceived = 0;
-            this.isTransferring = false;
-          } else if (parsed.type === "clipboard" || parsed.t === "clipboard") {
-            const textContent = parsed.payload || parsed.p || parsed.content;
-            if (textContent) {
-              await window.electronAPI.writeClipboard(textContent);
-              this.onClipboardReceived?.(textContent);
-              console.log("Clipboard berhasil diperbarui di PC!");
-            }
-          }
-        } catch (err) {
-          console.error("Gagal parse data WebRTC:", err);
-        }
-      } else {
-        // Data biner = satu potongan (chunk) isi file. Ditumpuk dulu di
-        // this.incomingChunks, baru digabung jadi Blob pas sinyal
-        // "file-complete" diterima (lihat blok string di atas).
-        const chunk = event.data as ArrayBuffer;
-        this.incomingChunks.push(chunk);
-        this.incomingBytesReceived += chunk.byteLength;
-
-        if (this.incomingMeta && this.incomingMeta.size > 0) {
-          const percent = Math.min(
-            100,
-            Math.round(
-              (this.incomingBytesReceived / this.incomingMeta.size) * 100,
-            ),
-          );
-          if (percent !== this.lastReceivedPercent) {
-            this.lastReceivedPercent = percent;
-            this.onReceiveProgress?.(this.incomingMeta.name, percent);
-          }
-        }
-      }
-    };
+    channel.onmessage = (event) => void this.handleIncomingMessage(event);
   }
 
-  private trackIceState(peerConnection: RTCPeerConnection) {
-    peerConnection.oniceconnectionstatechange = () => {
-      const state = peerConnection.iceConnectionState;
-      console.log("ICE state:", state);
-      if (this.peerConnection !== peerConnection) return;
-
-      // Timer state sebelumnya tidak lagi relevan setelah ICE state berubah.
-      this.clearIceWatchdogs();
-
-      if (state === "checking") {
-        this.negotiationState = "connecting";
-        // ICE dapat berhenti di "checking" tanpa berpindah ke "failed".
-        // Lepaskan state connecting agar auto-reconnect dapat mencoba lagi.
-        this.checkingWatchdogTimer = window.setTimeout(() => {
-          if (this.peerConnection !== peerConnection) return;
-          if (peerConnection.iceConnectionState === "checking") {
-            console.warn(
-              "ICE terlalu lama di 'checking'; koneksi akan dicoba ulang.",
-            );
-            this.negotiationState = "failed";
-            this.onConnectionStateChange?.(false);
-          }
-        }, 8_000);
-      } else if (state === "connected" || state === "completed") {
-        // SENGAJA TIDAK di-set "connected" di sini. ICE connected cuma
-        // berarti jalur network-nya nyambung — datachannel (SCTP) masih
-        // proses handshake terpisah setelah ini, butuh waktu tambahan.
-        // Kalau negotiationState di-set "connected" di titik ini,
-        // canAttemptReconnect() bakal nganggep "boleh coba lagi" padahal
-        // datachannel-nya BELUM open, jadi auto-reconnect bisa nutup
-        // koneksi yang hampir jadi ini sebelum sempat kebuka beneran.
-        // Biarkan tetap "connecting" sampai channel.onopen beneran fire.
-      } else if (state === "disconnected") {
-        // Jangan langsung gagal: state ini sering pulih sendiri setelah
-        // gangguan jaringan singkat, sehingga menghindari reconnect flapping.
-        // Kalau lagi ada transfer aktif, kasih grace period JAUH lebih
-        // panjang — transfer file (apalagi yang gede) sendiri bisa bikin
-        // ICE sempat "disconnected" sesaat karena jalur network lagi sibuk,
-        // itu bukan berarti koneksinya beneran putus.
-        const graceMs = this.isTransferring ? 15_000 : 4_000;
-        this.disconnectGraceTimer = window.setTimeout(() => {
-          if (this.peerConnection !== peerConnection) return;
-          if (peerConnection.iceConnectionState === "disconnected") {
-            this.negotiationState = "failed";
-            this.onConnectionStateChange?.(false);
-          }
-        }, graceMs);
-      } else if (state === "failed" || state === "closed") {
-        this.negotiationState = "failed";
-        this.onConnectionStateChange?.(false);
-      }
-    };
-  }
-
-  public isConnected(): boolean {
-    return this.dataChannel?.readyState === "open";
-  }
-
-  /**
-   * Dipakai UI (misal auto-reconnect interval) buat nanya "boleh ga gue coba
-   * connect ulang sekarang?". Jawabannya TIDAK kalau lagi belum konek TAPI
-   * masih dalam proses checking/connecting — supaya proses itu dikasih
-   * kesempatan selesai dulu, bukan langsung dipotong & diulang dari nol.
-   * JUGA tidak boleh kalau lagi ada transfer aktif — reconnect di tengah
-   * transfer = motong peerConnection yang lagi dipakai ngirim/nerima file.
-   */
-  public canAttemptReconnect(): boolean {
-    if (this.isTransferring) return false;
-    if (this.isConnected()) return false;
-    return this.negotiationState !== "connecting";
-  }
-
-  public async waitForConnection(timeoutMs = 15_000): Promise<void> {
-    if (this.isConnected()) return;
-
-    const channel = this.dataChannel;
-    if (!channel || channel.readyState === "closed") {
-      throw new Error("Koneksi P2P belum dibuat.");
+  /** Router pesan masuk: string (JSON, kontrol) vs biner (isi chunk file). */
+  private async handleIncomingMessage(event: MessageEvent): Promise<void> {
+    if (typeof event.data !== "string") {
+      this.handleIncomingFileChunk(event.data as ArrayBuffer);
+      return;
     }
 
-    await new Promise<void>((resolve, reject) => {
-      const interval = window.setInterval(() => {
-        if (channel.readyState === "open") {
-          window.clearInterval(interval);
-          window.clearTimeout(timeout);
-          resolve();
-        } else if (channel.readyState === "closed") {
-          window.clearInterval(interval);
-          window.clearTimeout(timeout);
-          reject(new Error("Koneksi P2P tertutup."));
-        }
-      }, 100);
-      const timeout = window.setTimeout(() => {
-        window.clearInterval(interval);
-        reject(new Error("Waktu tunggu koneksi P2P habis."));
-      }, timeoutMs);
-    });
+    // Try/catch-nya sengaja membungkus SELURUH proses (parse + dispatch),
+    // bukan cuma JSON.parse — kalau salah satu handler di bawah (misalnya
+    // handleIncomingClipboard yang manggil electronAPI.writeClipboard)
+    // throw, itu tetap harus ketangkep di sini, bukan jadi unhandled
+    // promise rejection yang bisa bikin data channel event handler error.
+    try {
+      const parsed = JSON.parse(event.data) as Record<string, unknown>;
+      console.log("Pesan diterima di PC:", parsed);
+
+      const messageType =
+        parsed.type ?? (parsed.t === "clipboard" ? "clipboard" : undefined);
+
+      switch (messageType) {
+        case "file-meta":
+          this.handleIncomingFileMeta(parsed as unknown as IncomingFileMeta);
+          break;
+        case "file-complete":
+          this.handleIncomingFileComplete();
+          break;
+        case "clipboard":
+          await this.handleIncomingClipboard(parsed);
+          break;
+      }
+    } catch (err) {
+      console.error("Gagal parse data WebRTC:", err);
+    }
   }
 
-  async createOffer(
-    userId: string,
-    targetDeviceId: string,
-    myDeviceId: string,
-    force = false,
-  ) {
-    // JANGAN PERNAH motong koneksi yang lagi dipakai transfer aktif, bahkan
-    // dengan force=true — force cuma buat "user maksa reconnect manual",
-    // dan itu ga masuk akal kalau lagi ada file yang lagi jalan dikirim.
-    if (this.isTransferring) return;
+  private handleIncomingFileMeta(meta: IncomingFileMeta) {
+    this.incomingMeta = meta;
+    this.incomingChunks = [];
+    this.incomingBytesReceived = 0;
+    this.lastReceivedPercent = -1;
+    this.isTransferring = true;
+    this.onReceiveProgress?.(meta.name, 0);
+  }
 
-    const callId = `${myDeviceId}_to_${targetDeviceId}`;
-    const channelIsActive =
-      this.dataChannel?.readyState === "connecting" ||
-      this.dataChannel?.readyState === "open";
+  private handleIncomingFileChunk(chunk: ArrayBuffer) {
+    this.incomingChunks.push(chunk);
+    this.incomingBytesReceived += chunk.byteLength;
 
-    if (!force && this.negotiationState === "connecting") return;
-    if (!force && this.activeCallId === callId && channelIsActive) return;
+    if (!this.incomingMeta || this.incomingMeta.size <= 0) return;
 
-    this.negotiationState = "connecting";
-    this.clearCallSignalListeners();
-    this.clearIceWatchdogs();
-    this.peerConnection?.close();
-    const peerConnection = new RTCPeerConnection(configuration);
-    this.peerConnection = peerConnection;
-    this.activeCallId = callId;
-    this.dataChannel = peerConnection.createDataChannel("orbit-transfer");
-    this.setupDataChannelHandlers();
-    const callRef = ref(db, `calls/${userId}/${callId}`);
-    peerConnection.onicecandidate = ({ candidate }) => {
-      if (candidate)
-        void set(push(child(callRef, "offerCandidates")), candidate.toJSON());
-    };
-
-    this.trackIceState(peerConnection);
-
-    const offer = await peerConnection.createOffer();
-    await peerConnection.setLocalDescription(offer);
-    await set(callRef, { offer: { type: offer.type, sdp: offer.sdp } });
-    let isApplyingAnswer = false;
-    const pendingAnswerCandidates: RTCIceCandidateInit[] = [];
-    const addAnswerCandidate = async (candidate: RTCIceCandidateInit) => {
-      if (!peerConnection.remoteDescription) {
-        pendingAnswerCandidates.push(candidate);
-        return;
-      }
-
-      try {
-        await peerConnection.addIceCandidate(candidate);
-      } catch (error) {
-        console.error("Gagal menambahkan ICE candidate answer:", error);
-      }
-    };
-    const stopAnswerListener = onValue(
-      child(callRef, "answer"),
-      async (snapshot) => {
-        const answer = snapshot.val();
-        if (
-          !answer ||
-          isApplyingAnswer ||
-          this.peerConnection !== peerConnection ||
-          peerConnection.signalingState !== "have-local-offer"
-        )
-          return;
-
-        isApplyingAnswer = true;
-        try {
-          await peerConnection.setRemoteDescription(answer);
-          await Promise.all(
-            pendingAnswerCandidates.splice(0).map(addAnswerCandidate),
-          );
-        } catch (error) {
-          console.error("Gagal menerapkan WebRTC answer:", error);
-          this.onError?.("Gagal menyambungkan perangkat.");
-        } finally {
-          isApplyingAnswer = false;
-        }
-      },
+    const percent = Math.min(
+      100,
+      Math.round((this.incomingBytesReceived / this.incomingMeta.size) * 100),
     );
-    this.callSignalUnsubscribes.push(stopAnswerListener);
-    const stopAnswerCandidatesListener = onChildAdded(
-      child(callRef, "answerCandidates"),
-      (snapshot) => {
-        if (this.peerConnection === peerConnection)
-          void addAnswerCandidate(snapshot.val());
-      },
-    );
-    this.callSignalUnsubscribes.push(stopAnswerCandidatesListener);
+    if (percent !== this.lastReceivedPercent) {
+      this.lastReceivedPercent = percent;
+      this.onReceiveProgress?.(this.incomingMeta.name, percent);
+    }
+  }
+
+  private handleIncomingFileComplete() {
+    // Baru di titik INI file dianggap lengkap & utuh — bukan pas chunk
+    // biner pertama nyampe. Lihat penjelasan panjang di
+    // `fileTransferProtocol.ts` kenapa ini penting.
+    if (this.incomingMeta) {
+      const meta = this.incomingMeta;
+      const blob = new Blob(this.incomingChunks, { type: meta.mimeType });
+      this.onFileReceived?.(blob, meta);
+      this.onReceiveComplete?.(meta.name, true);
+    }
+    this.incomingMeta = null;
+    this.incomingChunks = [];
+    this.incomingBytesReceived = 0;
+    this.isTransferring = false;
+  }
+
+  private async handleIncomingClipboard(parsed: Record<string, unknown>) {
+    const text = extractClipboardText(parsed);
+    if (!text) return;
+    await window.electronAPI.writeClipboard(text);
+    this.onClipboardReceived?.(text);
+    console.log("Clipboard berhasil diperbarui di PC!");
   }
 
   /**
-   * PENTING — bagian yang sebelumnya HILANG TOTAL: dengerin ada panggilan
-   * masuk (device lain bikin offer ke kita), lalu otomatis jawab (answer).
-   * Panggil ini SEKALI aja pas app mulai & user udah login, ga perlu nunggu
-   * user pilih device dulu — supaya PC selalu siap "ngangkat telepon".
+   * Kirim satu file lewat data channel, dipecah per-chunk
+   * (`CHUNK_SIZE_BYTES`, samain sama sisi mobile — lihat
+   * `fileTransferProtocol.ts`). Reject/throw kalau data channel belum
+   * `"open"`.
    */
-
-  listenForIncomingCalls(userId: string, myDeviceId: string) {
-    this.incomingCallUnsubscribes.forEach((unsubscribe) => unsubscribe());
-    this.incomingCallUnsubscribes = [];
-
-    const callsRef = ref(db, `calls/${userId}`);
-    const suffix = `_to_${myDeviceId}`;
-
-    const handleSnapshot = (snapshot: DataSnapshot) => {
-      const callId = snapshot.key;
-      if (!callId?.endsWith(suffix)) return;
-      const data = snapshot.val();
-      const offer = data?.offer;
-      if (!offer?.sdp) return;
-
-      if (this.handledOffers.get(callId) === offer.sdp) return; // offer ini udah dijawab
-
-      this.handledOffers.set(callId, offer.sdp);
-      void this.answerCall(userId, callId, offer);
-    };
-
-    this.incomingCallUnsubscribes.push(onChildAdded(callsRef, handleSnapshot));
-    this.incomingCallUnsubscribes.push(
-      onChildChanged(callsRef, handleSnapshot),
-    );
-  }
-
-  private async answerCall(
-    userId: string,
-    callId: string,
-    offer: RTCSessionDescriptionInit,
-  ) {
-    // Sama kayak createOffer: jangan nyambut offer baru (yang bakal nutup
-    // peerConnection sekarang) kalau lagi ada transfer aktif jalan.
-    if (this.isTransferring) return;
-
-    this.negotiationState = "connecting";
-    this.clearCallSignalListeners();
-    this.clearIceWatchdogs();
-    this.peerConnection?.close();
-    const peerConnection = new RTCPeerConnection(configuration);
-    this.peerConnection = peerConnection;
-    this.activeCallId = callId;
-
-    peerConnection.ondatachannel = (event) => {
-      this.dataChannel = event.channel;
-      this.setupDataChannelHandlers();
-    };
-
-    this.trackIceState(peerConnection);
-
-    const callRef = ref(db, `calls/${userId}/${callId}`);
-    peerConnection.onicecandidate = ({ candidate }) => {
-      if (candidate)
-        void set(push(child(callRef, "answerCandidates")), candidate.toJSON());
-    };
-
-    await peerConnection.setRemoteDescription(offer);
-    const answer = await peerConnection.createAnswer();
-    await peerConnection.setLocalDescription(answer);
-    await set(child(callRef, "answer"), {
-      type: answer.type,
-      sdp: answer.sdp,
-    });
-
-    const stopOfferCandidatesListener = onChildAdded(
-      child(callRef, "offerCandidates"),
-      (snapshot) => {
-        if (this.peerConnection === peerConnection)
-          void peerConnection.addIceCandidate(snapshot.val());
-      },
-    );
-    this.callSignalUnsubscribes.push(stopOfferCandidatesListener);
-  }
-
-  async sendFile(file: File): Promise<void> {
+  public async sendFile(file: File): Promise<void> {
     const channel = this.dataChannel;
     if (channel?.readyState !== "open") {
       this.onError?.("Koneksi P2P belum terbuka. Coba pilih ulang device-nya.");
@@ -468,42 +566,27 @@ class WebRTCService {
     }
 
     this.isTransferring = true;
-    channel.send(
-      JSON.stringify({
-        type: "file-meta",
-        name: file.name,
-        size: file.size,
-        mimeType: file.type,
-      }),
-    );
+    channel.send(buildFileMetaMessage(file));
     this.onSendProgress?.(file.name, 0);
 
-    // Kirim per-chunk 16KB (samain sama sisi mobile) supaya: (1) progress
-    // bisa dilaporkan bertahap, bukan cuma "0%" lalu tiba-tiba "selesai",
-    // dan (2) file besar ga bikin datachannel keteteran ngirim satu blob
-    // raksasa sekaligus.
-    const CHUNK_SIZE = 16 * 1024;
     let offset = 0;
     let lastReportedPercent = -1;
 
     try {
       while (offset < file.size) {
-        const slice = file.slice(offset, offset + CHUNK_SIZE);
-        const buffer = await slice.arrayBuffer();
+        const chunk = await file
+          .slice(offset, offset + CHUNK_SIZE_BYTES)
+          .arrayBuffer();
 
-        // Backpressure: kalau buffer channel udah kebanyakan antrean,
-        // tunggu dulu. THRESHOLD DITURUNIN dari 8MB ke 256KB — 8MB
-        // kegedean, bikin ratusan chunk numpuk sekaligus di socket tanpa
-        // jeda ke event loop, yang berpotensi "menenggelamkan" paket
-        // keep-alive ICE di jaringan lambat/NAT ketat sampai dianggap
-        // putus (disconnected). Threshold lebih kecil = lebih sering
-        // ngasih jeda ke browser buat proses hal lain (termasuk ICE).
-        while (channel.bufferedAmount > 256 * 1024) {
+        // Backpressure: kalau antrean kirim udah kebanyakan, jeda dulu.
+        // Lihat penjelasan BACKPRESSURE_THRESHOLD_BYTES di
+        // fileTransferProtocol.ts — ini bukan cuma soal hemat memory.
+        while (channel.bufferedAmount > BACKPRESSURE_THRESHOLD_BYTES) {
           await new Promise((resolve) => window.setTimeout(resolve, 10));
         }
 
-        channel.send(buffer);
-        offset += buffer.byteLength;
+        channel.send(chunk);
+        offset += chunk.byteLength;
 
         if (file.size > 0) {
           const percent = Math.min(100, Math.round((offset / file.size) * 100));
@@ -514,7 +597,7 @@ class WebRTCService {
         }
       }
 
-      channel.send(JSON.stringify({ type: "file-complete" }));
+      channel.send(FILE_COMPLETE_MESSAGE);
       this.onSendComplete?.(file.name, true);
     } catch (error) {
       console.error("Gagal mengirim file:", error);
