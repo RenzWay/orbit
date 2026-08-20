@@ -1,18 +1,16 @@
 package com.renz.orbit.ui.components
 
 import androidx.compose.foundation.background
-import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
-import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
-import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.filled.Settings
+import androidx.compose.material.icons.filled.AccountCircle
+import androidx.compose.material.icons.filled.Person
 import androidx.compose.material3.Icon
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
@@ -58,14 +56,15 @@ fun HeaderHomeScreen(modifier: Modifier) {
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.Settings,
-                contentDescription = "Setting",
+                imageVector = Icons.Default.AccountCircle,
+                contentDescription = "Account",
                 tint = Color(0xFFB0B5C1), // Warna ikon agak abu-abu
                 modifier = Modifier.size(20.dp)
             )
         }
     }
 }
+
 @Preview
 @Composable
 private fun HeaderPrev() {

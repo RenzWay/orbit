@@ -124,6 +124,7 @@ class MainActivity : ComponentActivity() {
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
                 ) { }
+
                 LaunchedEffect(currentUser) {
                     if (currentUser != null) {
                         OrbitConnectionService.start(context)
@@ -137,6 +138,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
                 LaunchedEffect(Unit) {
                     val webRtcManager = OrbitRuntime.webRtcManager
                     webRtcManager.onDataReceived = { textData: String ->
@@ -251,6 +253,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
                     webRtcManager.onBinaryReceived = { bytes ->
                         scope.launch {
                             try {
@@ -277,6 +280,7 @@ class MainActivity : ComponentActivity() {
                         }
                     }
                 }
+
                 val filePickerLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.GetContent()
                 ) { uri: Uri? ->
@@ -286,6 +290,7 @@ class MainActivity : ComponentActivity() {
                         TransferManager.sendFilesToDevice(context, targetDevice, listOf(uri))
                     }
                 }
+
                 val googleSignInLauncher =
                     rememberLauncherForActivityResult(contract = ActivityResultContracts.StartActivityForResult()) { result ->
                         scope.launch {
@@ -303,6 +308,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                     }
+
                 val isOrbitActive = otherDevices.any { it.status.lowercase() == "online" }
                 if (currentUser == null) {
                     LoginPage(onLoginClick = { googleSignInLauncher.launch(authManager.getGoogleSignInClient().signInIntent) })
@@ -332,6 +338,7 @@ class MainActivity : ComponentActivity() {
                         },
                         modifier = Modifier
                     )
+
                     if (showClipboardModal) {
                         ClipboardModal(
                             clipboardText = clipboardText,
@@ -352,6 +359,7 @@ class MainActivity : ComponentActivity() {
                             onDismiss = { showClipboardModal = false }
                         )
                     }
+
                     if (pendingShareUris.isNotEmpty()) {
                         val onlineDevices =
                             otherDevices.filter { it.status.lowercase() == "online" }

@@ -60,10 +60,10 @@ class OrbitConnectionService : Service() {
     }
 
     /** Nyimpen device ID yang lagi online, dibandingin tiap snapshot Firebase
-    * berubah buat ngedeteksi TRANSISI offline->online doang (bukan notify
-    * ulang tiap snapshot dateng, itu bakal spam banget soalnya presence
-    * Firebase bisa update lumayan sering).
-    */
+     * berubah buat ngedeteksi TRANSISI offline->online doang (bukan notify
+     * ulang tiap snapshot dateng, itu bakal spam banget soalnya presence
+     * Firebase bisa update lumayan sering).
+     */
     private val knownOnlineDeviceIds = mutableSetOf<String>()
     private var isFirstSnapshot = true
 
@@ -104,6 +104,17 @@ class OrbitConnectionService : Service() {
                 isInitiator = false
             )
         }
+
+        OrbitRuntime.webRtcManager.onConnectionStateChanged = { isConnected ->
+            if (isConnected) {
+                val activeId = OrbitRuntime.activeConnectionDeviceId.value
+                val deviceName =
+                    OrbitRuntime.devices.value.find { it.id == activeId }?.deviceName ?: "PC"
+                updateNotification("Tersambung ke $deviceName")
+            } else {
+                updateNotification()
+            }
+        }
     }
 
     private fun getRealDeviceName(): String {
@@ -116,7 +127,13 @@ class OrbitConnectionService : Service() {
         }
     }
 
-    private fun buildNotification(): Notification {
+    private fun updateNotification(statusText: String? = null) {
+        val notificationManager =
+            getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        notificationManager.notify(NOTIFICATION_ID, buildNotification(statusText))
+    }
+
+    private fun buildNotification(statusText: String? = null): Notification {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
@@ -137,10 +154,12 @@ class OrbitConnectionService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
+        val contentText = statusText ?: "Siap menerima file & clipboard dari device lain"
+
         return NotificationCompat.Builder(this, CHANNEL_ID)
             .setContentTitle("Orbit aktif")
-            .setContentText("Siap menerima file & clipboard dari device lain")
-            .setSmallIcon(R.drawable.ic_launcher_foreground)
+            .setContentText(contentText)
+            .setSmallIcon(R.drawable.ic_orbit)
             .setContentIntent(openIntent)
             .setOngoing(true)
             .setPriority(NotificationCompat.PRIORITY_LOW)
