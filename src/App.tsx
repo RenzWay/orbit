@@ -2,9 +2,10 @@ import { useCallback, useState } from "react";
 import { TransferQr } from "./components/transfer/TransferQr";
 import { usePeer } from "./hooks/usePeer";
 import { QrScanner } from "./components/transfer/QrScanner";
+import { FilePicker } from "./components/transfer/FilePicker";
 
 function App() {
-  const { peerId, status, session, connect } = usePeer();
+  const { peerId, status, session, connect, sendFile } = usePeer();
 
   const [scanning, setScanning] = useState(false);
   const [tokenInput, setTokenInput] = useState("");
@@ -61,6 +62,13 @@ function App() {
       <button onClick={handleConnect}>Connect</button>
 
       <hr />
+      {status === "connected" && (
+        <>
+          <h2>Connected</h2>
+
+          <FilePicker onSend={sendFile} />
+        </>
+      )}
 
       <button onClick={() => setScanning(true)}>Scan QR</button>
 
