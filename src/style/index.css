@@ -1,3 +1,14 @@
 @import "tailwindcss";
 
 @custom-variant dark (&:where([data-theme=dark], [data-theme=dark] *));
+
+#qr-reader video {
+  transform: scaleX(-1);
+}
+
+@media (max-width:768px) {
+    
+#qr-reader video {
+  transform: scaleX(1);
+}
+}

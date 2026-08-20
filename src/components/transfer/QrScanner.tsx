@@ -21,7 +21,7 @@ export function QrScanner({ onScan }: QrScannerProps) {
           { facingMode: "environment" },
           {
             fps: 10,
-            qrbox: 250,
+            qrbox: { width: 320, height: 320 },
           },
           (decodedText) => {
             console.log("QR DETECTED:", decodedText);
@@ -59,7 +59,7 @@ export function QrScanner({ onScan }: QrScannerProps) {
       try {
         scanner.clear();
       } catch {
-        /* empty */
+        // empty
       }
     };
   }, [onScan]);

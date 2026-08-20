@@ -7,28 +7,25 @@ function App() {
   const { peerId, status, session, connect } = usePeer();
 
   const [scanning, setScanning] = useState(false);
+  const [tokenInput, setTokenInput] = useState("");
+
+  const handleConnect = () => {
+    const token = tokenInput.trim().toUpperCase();
+
+    if (!token) return;
+    connect(token);
+  };
 
   const handleScan = useCallback(
     (data: string) => {
-      try {
-        console.log("RAW QR:", data);
+      console.log("🔥 QR DATA:", data);
 
-        const payload = JSON.parse(data);
+      const peerId = data.trim();
 
-        console.log("QR PAYLOAD:", payload);
+      console.log("🔥 CONNECTING:", peerId);
 
-        if (!payload.p || !payload.t) {
-          throw new Error("Invalid AirTrash QR");
-        }
-
-        console.log("CONNECTING TO:", payload.p);
-
-        connect(payload.p);
-
-        setScanning(false);
-      } catch (error) {
-        console.error("QR ERROR:", error);
-      }
+      connect(peerId);
+      setScanning(false);
     },
     [connect],
   );
@@ -39,16 +36,37 @@ function App() {
 
       <p>Status: {status}</p>
 
-      {session && <TransferQr session={session} />}
+      {/* SENDER */}
+      {session && (
+        <>
+          <h3>My Token</h3>
+          <h1>{peerId}</h1>
+
+          <TransferQr session={session} />
+        </>
+      )}
+
+      <hr />
+
+      {/* RECEIVER */}
+      <h3>Connect with Token</h3>
+
+      <input
+        type="text"
+        placeholder="Contoh: 8KQ4XM"
+        value={tokenInput}
+        onChange={(e) => setTokenInput(e.target.value)}
+      />
+
+      <button onClick={handleConnect}>Connect</button>
 
       <hr />
 
       <button onClick={() => setScanning(true)}>Scan QR</button>
 
       {scanning && <QrScanner onScan={handleScan} />}
-
-      <p>My Peer ID: {peerId}</p>
     </section>
   );
 }
+
 export default App;

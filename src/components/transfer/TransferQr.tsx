@@ -6,16 +6,11 @@ interface TransferQrProps {
 }
 
 export function TransferQr({ session }: TransferQrProps) {
-  const payload = JSON.stringify({
-    peerId: session.peerId,
-    token: session.token,
-  });
-
   return (
     <div>
-      <QRCodeSVG value={payload} size={256} />
+      <QRCodeSVG value={session.peerId} size={256} />
 
-      <p>{session.token}</p>
+      <p>{session.peerId}</p>
     </div>
   );
 }

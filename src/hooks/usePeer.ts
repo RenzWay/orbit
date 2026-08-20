@@ -1,8 +1,9 @@
 import type { DataConnection } from "peerjs";
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { PeerService } from "../service/peer/peer.service";
 import { TransferService } from "../service/transfer/transfer.service";
 import type { TransferSession } from "../service/transfer/transfer.type";
+import { generateToken } from "../service/transfer/token";
 
 export function usePeer() {
   const serviceRef = useRef<PeerService | null>(null);
@@ -18,7 +19,11 @@ export function usePeer() {
     const service = new PeerService();
     const transferService = new TransferService();
 
-    const peer = service.create();
+    const token = generateToken();
+
+    console.log("GENERATED TOKEN:", token);
+
+    const peer = service.create(token);
 
     serviceRef.current = service;
     TransferServiceRef.current = transferService;
@@ -59,10 +64,11 @@ export function usePeer() {
     };
   }, []);
 
-  const connect = (peerId: string) => {
+  const connect = useCallback((peerId: string) => {
     if (!serviceRef.current) {
       throw new Error("peer service not ready yet");
     }
+
     console.log("CONNECTING TO PEER:", peerId);
 
     const connection = serviceRef.current.connect(peerId);
@@ -70,7 +76,7 @@ export function usePeer() {
     connectionRef.current = connection;
 
     connection.on("open", () => {
-      console.log(`connected id: ${peerId}`);
+      console.log(`CONNECTED TO: ${peerId}`);
       setStatus("connected");
     });
 
@@ -80,10 +86,10 @@ export function usePeer() {
     });
 
     connection.on("close", () => {
-      console.log("connection close");
+      console.log("CONNECTION CLOSED");
       setStatus("waiting");
     });
-  };
+  }, []);
 
   return {
     peerId,

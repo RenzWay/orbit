@@ -3,8 +3,8 @@ import Peer, { type DataConnection } from "peerjs";
 export class PeerService {
   private peer: Peer | null = null;
 
-  create() {
-    this.peer = new Peer({
+  create(peerId: string) {
+    this.peer = new Peer(peerId, {
       config: {
         iceServers: [
           {
@@ -13,13 +13,16 @@ export class PeerService {
         ],
       },
     });
+
     return this.peer;
   }
 
   connect(peerId: string): DataConnection {
     if (!this.peer) {
-      throw new Error("Peer not created yet");
+      throw new Error("Peer belum dibuat");
     }
+
+    console.log("PeerService connecting:", peerId);
 
     return this.peer.connect(peerId, {
       reliable: true,
