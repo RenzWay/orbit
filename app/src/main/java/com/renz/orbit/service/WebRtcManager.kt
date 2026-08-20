@@ -32,11 +32,17 @@ import kotlin.time.Duration.Companion.milliseconds
 import kotlin.time.Duration.Companion.minutes
 import kotlin.time.Duration.Companion.seconds
 
+/**
+ * Owns the WebRTC peer connection and Firebase signaling for one app process.
+ *
+ * The manager intentionally keeps its original responsibilities: connection setup,
+ * SDP/ICE signaling, DataChannel I/O, and connection resource cleanup. Higher-level
+ * transfer orchestration lives in [TransferManager].
+ */
 class WebRtcManager(private val context: Context) {
     private val db =
         FirebaseDatabase.getInstance("https://letter-26c71-default-rtdb.asia-southeast1.firebasedatabase.app")
     private val auth = FirebaseAuth.getInstance()
-    private val TAG = "WebRtcManager"
 
     private var peerConnectionFactory: PeerConnectionFactory? = null
     private var peerConnection: PeerConnection? = null
@@ -46,7 +52,6 @@ class WebRtcManager(private val context: Context) {
     private val addedIceCandidates = mutableSetOf<String>()
     private var processedRemoteSdp: String? = null
 
-    // [ORBIT FIX]
     private val wifiLockMode =
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q)
             WifiManager.WIFI_MODE_FULL_LOW_LATENCY
@@ -64,9 +69,10 @@ class WebRtcManager(private val context: Context) {
     private var idleWatcherJob: Job? = null
     private var lastActivityAt = System.currentTimeMillis()
 
-    companion object {
-        private val WAKE_LOCK_BURST = 60.seconds
-        private val IDLE_DISCONNECT_TIMEOUT = 10.minutes
+    private companion object {
+        const val TAG = "WebRtcManager"
+        val WAKE_LOCK_BURST = 60.seconds
+        val IDLE_DISCONNECT_TIMEOUT = 10.minutes
     }
 
     fun markActivity() {
@@ -89,7 +95,6 @@ class WebRtcManager(private val context: Context) {
             }
         }
     }
-    // [END ORBIT FIX]
 
     var onDataReceived: ((String) -> Unit)? = null
     var onBinaryReceived: ((ByteArray) -> Unit)? = null
@@ -184,11 +189,8 @@ class WebRtcManager(private val context: Context) {
     // 1. Inisialisasi PeerConnection & ICE Server (Google STUN)
     fun createPeerConnection(targetDeviceId: String, myDeviceId: String, isInitiator: Boolean) {
         if (!wifiLock.isHeld) wifiLock.acquire()
-        // [ORBIT FIX]
         markActivity()
-        // [END ORBIT FIX]
 
-        // [ORBIT FIX]
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
             PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
@@ -205,7 +207,6 @@ class WebRtcManager(private val context: Context) {
                 .setPassword("openrelayproject")
                 .createIceServer()
         )
-        // [END ORBIT FIX]
 
         val rtcConfig = PeerConnection.RTCConfiguration(iceServers).apply {
             sdpSemantics = PeerConnection.SdpSemantics.UNIFIED_PLAN
@@ -301,18 +302,14 @@ class WebRtcManager(private val context: Context) {
             override fun onBufferedAmountChange(p0: Long) {}
             override fun onStateChange() {
                 Log.d(TAG, "DataChannel State: ${dataChannel?.state()}")
-                // [ORBIT FIX]
                 if (dataChannel?.state() == DataChannel.State.OPEN) {
                     markActivity()
                     startIdleWatcher()
                 }
-                // [END ORBIT FIX]
             }
 
             override fun onMessage(buffer: DataChannel.Buffer) {
-                // [ORBIT FIX]
                 markActivity()
-                // [END ORBIT FIX]
                 val data = buffer.data
                 val bytes = ByteArray(data.remaining())
                 data.get(bytes)
@@ -331,9 +328,7 @@ class WebRtcManager(private val context: Context) {
 
     fun sendData(text: String) {
         if (dataChannel?.state() == DataChannel.State.OPEN) {
-            // [ORBIT FIX]
             markActivity()
-            // [END ORBIT FIX]
             val buffer = ByteBuffer.wrap(text.toByteArray(Charsets.UTF_8))
             dataChannel?.send(DataChannel.Buffer(buffer, false))
             Log.d(TAG, "Berhasil kirim data via DataChannel!")
@@ -347,9 +342,7 @@ class WebRtcManager(private val context: Context) {
             Log.e(TAG, "DataChannel belum OPEN! State saat ini: ${dataChannel?.state()}")
             return
         }
-        // [ORBIT FIX]
         markActivity()
-        // [END ORBIT FIX]
 
         val json = JSONObject().apply {
             put("type", "clipboard")
@@ -489,9 +482,7 @@ class WebRtcManager(private val context: Context) {
 
     fun sendBinary(bytes: ByteArray): Boolean {
         if (dataChannel?.state() == DataChannel.State.OPEN) {
-            // [ORBIT FIX]
             markActivity()
-            // [END ORBIT FIX]
             val buffer = ByteBuffer.wrap(bytes)
             return dataChannel?.send(DataChannel.Buffer(buffer, true)) ?: false
         }
@@ -513,9 +504,7 @@ class WebRtcManager(private val context: Context) {
 
     fun closeConnection() {
         try {
-            // [ORBIT FIX]
             idleWatcherJob?.cancel()
-            // [END ORBIT FIX]
             if (wifiLock.isHeld) wifiLock.release()
             if (wakeLock.isHeld) wakeLock.release()
             addedIceCandidates.clear()
@@ -530,41 +519,24 @@ class WebRtcManager(private val context: Context) {
             resetHandleCalls()
             Log.d(TAG, "Sesi koneksi P2P ditutup (factory tetap hidup).")
         } catch (e: Exception) {
-            Log.e(TAG, "Error closing connection: ${e.message}")
-
+            Log.e(TAG, "Error closing connection", e)
         }
     }
 
+    /** Releases the active connection and the WebRTC factory. */
     fun shutdown() {
         try {
             closeConnection()
             peerConnectionFactory?.dispose()
-            Log.d(TAG, "WebRtc resource clean up successfully")
+            peerConnectionFactory = null
+            Log.d(TAG, "WebRTC resources cleaned up successfully")
         } catch (e: Exception) {
-            Log.e(TAG, "Error during shutdown ${e.message}")
+            Log.e(TAG, "Error during shutdown", e)
         }
     }
 
-    fun close() {
-        try {
-            // [ORBIT FIX]
-            idleWatcherJob?.cancel()
-            // [END ORBIT FIX]
-            if (wifiLock.isHeld) wifiLock.release()
-            if (wakeLock.isHeld) wakeLock.release()
-            addedIceCandidates.clear()
-            processedRemoteSdp = null
-            pendingIceCandidates.clear()
-            dataChannel?.close()
-            dataChannel?.dispose()
-            peerConnection?.close()
-            peerConnection?.dispose()
-            peerConnectionFactory?.dispose()
-            Log.d(TAG, "WebRTC resources cleaned up successfully.")
-        } catch (e: Exception) {
-            Log.e(TAG, "Error closing WebRTC: ${e.message}")
-        }
-    }
+    /** Backward-compatible alias for callers that still use the old name. */
+    fun close() = shutdown()
 }
 
 open class SimpleSdpObserver : SdpObserver {

@@ -100,7 +100,7 @@ class AuthManager(private val context: Context) {
 
     fun handleDeepLinkIntent(
         uri: Uri?,
-        onSucess: () -> Unit,
+        onSuccess: () -> Unit,
         onError: (Exception) -> Unit,
 
         ) {
@@ -110,7 +110,7 @@ class AuthManager(private val context: Context) {
                 val credential = GoogleAuthProvider.getCredential(idToken, null)
                 auth.signInWithCredential(credential)
                     .addOnSuccessListener {
-                        onSucess()
+                        onSuccess()
                     }
                     .addOnFailureListener { exeption ->
                         onError(exeption)

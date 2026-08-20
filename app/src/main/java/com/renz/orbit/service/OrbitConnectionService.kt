@@ -59,10 +59,11 @@ class OrbitConnectionService : Service() {
         return START_STICKY
     }
 
-    // Nyimpen device ID yang lagi online, dibandingin tiap snapshot Firebase
-    // berubah buat ngedeteksi TRANSISI offline->online doang (bukan notify
-    // ulang tiap snapshot dateng, itu bakal spam banget soalnya presence
-    // Firebase bisa update lumayan sering).
+    /** Nyimpen device ID yang lagi online, dibandingin tiap snapshot Firebase
+    * berubah buat ngedeteksi TRANSISI offline->online doang (bukan notify
+    * ulang tiap snapshot dateng, itu bakal spam banget soalnya presence
+    * Firebase bisa update lumayan sering).
+    */
     private val knownOnlineDeviceIds = mutableSetOf<String>()
     private var isFirstSnapshot = true
 
