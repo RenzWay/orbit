@@ -6,6 +6,15 @@ import type { TransferSession } from "../service/transfer/transfer.type";
 import { generateToken } from "../service/transfer/token";
 import { FileTransferService } from "../service/transfer/file-transfer.service";
 
+export interface SendingFile {
+  length: number;
+  id: string;
+  name: string;
+  size: number;
+  progress: number;
+  status: "queued" | "sending" | "completed" | "failed";
+}
+
 export function usePeer() {
   const serviceRef = useRef<PeerService | null>(null);
   const TransferServiceRef = useRef<TransferService | null>(null);
@@ -16,6 +25,7 @@ export function usePeer() {
   const [peerId, setPeerId] = useState("");
   const [status, setStatus] = useState("creating");
   const [session, setSession] = useState<TransferSession | null>(null);
+  const [sendingFiles, setSendingFiles] = useState<SendingFile[]>([]);
 
   /*
    * Semua connection masuk ke sini.
@@ -28,6 +38,8 @@ export function usePeer() {
       name: string;
       size: number;
       mimeType: string;
+      chunks: Uint8Array[];
+      received: number;
     } | null = null;
 
     connection.on("open", () => {
@@ -37,38 +49,64 @@ export function usePeer() {
     });
 
     connection.on("data", (data) => {
-      console.log("DATA RECEIVED:", data);
-
-      // Metadata file
+      // FILE START
       if (
         typeof data === "object" &&
         data !== null &&
         "type" in data &&
-        data.type === "file" &&
-        "name" in data &&
-        typeof data.name === "string" &&
-        "size" in data &&
-        typeof data.size === "number" &&
-        "mimeType" in data &&
-        typeof data.mimeType === "string"
+        data.type === "file-start"
       ) {
-        incomingFile = {
-          name: data.name,
-          size: data.size,
-          mimeType: data.mimeType,
+        const fileStart = data as {
+          type: "file-start";
+          name: string;
+          size: number;
+          mimeType: string;
         };
 
-        console.log("FILE METADATA:", incomingFile);
+        incomingFile = {
+          name: fileStart.name,
+          size: fileStart.size,
+          mimeType: fileStart.mimeType,
+          chunks: [],
+          received: 0,
+        };
+
+        console.log("FILE START:", incomingFile.name);
+        return;
+      }
+
+      // FILE CHUNK
+      if (data instanceof Uint8Array && incomingFile) {
+        incomingFile.chunks.push(data);
+        incomingFile.received += data.byteLength;
+
+        console.log(
+          `RECEIVING ${incomingFile.name}: ${Math.round(
+            (incomingFile.received / incomingFile.size) * 100,
+          )}%`,
+        );
 
         return;
       }
 
-      // Binary file
-      if (data instanceof Uint8Array && incomingFile) {
-        const bytes = new Uint8Array(data);
+      // FILE END
+      if (
+        typeof data === "object" &&
+        data !== null &&
+        "type" in data &&
+        data.type === "file-end" &&
+        incomingFile
+      ) {
+        const file = incomingFile;
 
-        const blob = new Blob([bytes.buffer], {
-          type: incomingFile.mimeType,
+        const blobParts = file.chunks.map((chunk) => {
+          const copy = new Uint8Array(chunk.byteLength);
+          copy.set(chunk);
+          return copy.buffer;
+        });
+
+        const blob = new Blob(blobParts, {
+          type: file.mimeType,
         });
 
         const url = URL.createObjectURL(blob);
@@ -76,7 +114,7 @@ export function usePeer() {
         const link = document.createElement("a");
 
         link.href = url;
-        link.download = incomingFile.name;
+        link.download = file.name;
 
         document.body.appendChild(link);
         link.click();
@@ -84,7 +122,7 @@ export function usePeer() {
 
         URL.revokeObjectURL(url);
 
-        console.log("FILE DOWNLOADED:", incomingFile.name);
+        console.log("FILE DOWNLOADED:", file.name);
 
         incomingFile = null;
       }
@@ -165,25 +203,80 @@ export function usePeer() {
     [setupConnection],
   );
 
-  const sendFile = useCallback((file: File) => {
+  const sendFile = useCallback(async (file: File) => {
     const connection = connectionRef.current;
 
     if (!connection) {
-      console.error("Belum terhubung");
-      return;
+      throw new Error("Belum terhubung");
     }
 
     if (!connection.open) {
-      console.error("Connection belum open");
-      return;
+      throw new Error("Connection belum open");
     }
 
     if (!fileTransferRef.current) {
-      console.error("FileTransferService belum siap");
-      return;
+      throw new Error("FileTransferService belum siap");
     }
 
-    fileTransferRef.current.send(connection, file);
+    const id = crypto.randomUUID();
+
+    setSendingFiles((prev) => [
+      ...prev,
+      {
+        id,
+        name: file.name,
+        size: file.size,
+        length: file.size,
+        progress: 0,
+        status: "queued",
+      },
+    ]);
+
+    try {
+      setSendingFiles((prev) =>
+        prev.map((item) =>
+          item.id === id ? { ...item, status: "sending" } : item,
+        ),
+      );
+
+      await fileTransferRef.current.send(connection, file, ({ percentage }) => {
+        setSendingFiles((prev) =>
+          prev.map((item) =>
+            item.id === id
+              ? {
+                  ...item,
+                  progress: percentage,
+                }
+              : item,
+          ),
+        );
+      });
+
+      setSendingFiles((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                progress: 100,
+                status: "completed",
+              }
+            : item,
+        ),
+      );
+    } catch (error) {
+      setSendingFiles((prev) =>
+        prev.map((item) =>
+          item.id === id
+            ? {
+                ...item,
+                status: "failed",
+              }
+            : item,
+        ),
+      );
+
+      throw error;
+    }
   }, []);
 
   return {
@@ -192,5 +285,6 @@ export function usePeer() {
     session,
     connect,
     sendFile,
+    sendingFiles,
   };
 }
