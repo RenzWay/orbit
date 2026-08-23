@@ -36,6 +36,7 @@ import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
@@ -46,8 +47,10 @@ import com.renz.orbit.service.OrbitConnectionService
 import com.renz.orbit.service.OrbitRuntime
 import com.renz.orbit.service.TransferManager
 import com.renz.orbit.ui.components.ClipboardModal
+import com.renz.orbit.ui.navigation.Screen
 import com.renz.orbit.ui.screen.HomeScreen
 import com.renz.orbit.ui.screen.LoginPage
+import com.renz.orbit.ui.screen.SettingScreen
 import com.renz.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.launch
 import org.json.JSONObject
@@ -109,6 +112,7 @@ class MainActivity : ComponentActivity() {
                 var lastReportedPercent by remember { mutableIntStateOf(-1) }
                 var pendingSendTarget by remember { mutableStateOf<Device?>(null) }
                 var pendingShareUris by remember { mutableStateOf(initialShareUris) }
+                var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
 
                 pendingShareUrisState = { uris -> pendingShareUris = uris }
 
@@ -313,32 +317,44 @@ class MainActivity : ComponentActivity() {
                 if (currentUser == null) {
                     LoginPage(onLoginClick = { googleSignInLauncher.launch(authManager.getGoogleSignInClient().signInIntent) })
                 } else {
-                    HomeScreen(
-                        devices = otherDevices,
-                        isOrbitActive = isOrbitActive,
-                        onSendFile = { device ->
-                            pendingSendTarget = device
-                            filePickerLauncher.launch("*/*")
-                        },
-                        onSyncClipboard = { device ->
-                            clipboardTargetDevice = device
-                            val clipboard = getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                            val clipData = clipboard.primaryClip
-                            if (clipData != null && clipData.itemCount > 0) {
-                                clipboardText = clipData.getItemAt(0).text?.toString() ?: ""
-                            }
-                            showClipboardModal = true
-                        },
-                        onUnsyncDevice = { device ->
-                            OrbitRuntime.orbitPresence.removeDevice(device.id)
-                            if (OrbitRuntime.activeConnectionDeviceId.value == device.id) {
-                                OrbitRuntime.webRtcManager.closeConnection()
-                                OrbitRuntime.setActiveConnection(null)
-                            }
-                        },
-                        modifier = Modifier
-                    )
+                    when (currentScreen) {
+                        is Screen.Home ->
+                            HomeScreen(
+                                devices = otherDevices,
+                                isOrbitActive = isOrbitActive,
+                                onSendFile = { device ->
+                                    pendingSendTarget = device
+                                    filePickerLauncher.launch("*/*")
+                                },
+                                onSyncClipboard = { device ->
+                                    clipboardTargetDevice = device
+                                    val clipboard =
+                                        getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
+                                    val clipData = clipboard.primaryClip
+                                    if (clipData != null && clipData.itemCount > 0) {
+                                        clipboardText = clipData.getItemAt(0).text?.toString() ?: ""
+                                    }
+                                    showClipboardModal = true
+                                },
+                                onUnsyncDevice = { device ->
+                                    OrbitRuntime.orbitPresence.removeDevice(device.id)
+                                    if (OrbitRuntime.activeConnectionDeviceId.value == device.id) {
+                                        OrbitRuntime.webRtcManager.closeConnection()
+                                        OrbitRuntime.setActiveConnection(null)
+                                    }
+                                },
+                                onAccountClick = {
+                                    currentScreen = Screen.Profile
+                                },
+                                modifier = Modifier
+                            )
 
+                        is Screen.Profile ->{
+                            SettingScreen()
+                        }
+
+                        else -> {Text(stringResource(R.string.undifiend_page))}
+                    }
                     if (showClipboardModal) {
                         ClipboardModal(
                             clipboardText = clipboardText,

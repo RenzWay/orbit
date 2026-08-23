@@ -30,6 +30,8 @@ import androidx.compose.ui.graphics.vector.ImageVector
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.renz.orbit.R
 import kotlinx.coroutines.launch
 
 @Composable
@@ -37,15 +39,15 @@ fun QuickActions(
     onSendFileClick: () -> Unit,
     onSyncClipboardClick: () -> Unit,
     enable: Boolean = true,
+    snackbarHostState: SnackbarHostState,
     modifier: Modifier = Modifier
 ) {
     val scope = rememberCoroutineScope()
-
-    val snackbarHostState = remember { SnackbarHostState() }
+    val offlineMsg = stringResource(R.string.msg_device_offline)
 
     Column(modifier = modifier.fillMaxWidth()) {
         Text(
-            text = "Quick action",
+            text = stringResource(R.string.title_quick_action),
             color = Color(0xFF94A3B8),
             fontSize = 13.sp,
             fontWeight = FontWeight.Medium,
@@ -57,7 +59,7 @@ fun QuickActions(
             horizontalArrangement = Arrangement.spacedBy(12.dp)
         ) {
             ActionButton(
-                title = "Send File",
+                title = stringResource(R.string.action_send_file),
                 icon = Icons.Default.Send,
                 iconTint = Color(0xFF05DF72),
                 enable = enable,
@@ -67,7 +69,7 @@ fun QuickActions(
                     } else {
                         scope.launch {
                             snackbarHostState.showSnackbar(
-                                "Device ini masih offline"
+                                offlineMsg
                             )
                         }
                     }
@@ -76,7 +78,7 @@ fun QuickActions(
             )
 
             ActionButton(
-                title = "Sync clipboard",
+                title = stringResource(R.string.action_sync_clipboard),
                 icon = Icons.Default.Assignment,
                 iconTint = Color(0xFFFF6D00),
                 enable = enable,
@@ -86,7 +88,7 @@ fun QuickActions(
                     } else {
                         scope.launch {
                             snackbarHostState.showSnackbar(
-                                "Device ini masih offline"
+                                offlineMsg
                             )
                         }
                     }
@@ -95,10 +97,7 @@ fun QuickActions(
             )
         }
 
-        SnackbarHost(
-            hostState = snackbarHostState,
-            modifier = Modifier.align(Alignment.CenterHorizontally)
-        )
+
     }
 }
 

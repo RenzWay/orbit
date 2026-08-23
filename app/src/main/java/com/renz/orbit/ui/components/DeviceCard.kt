@@ -36,6 +36,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.renz.orbit.R
 import com.renz.orbit.ui.theme.OrbitTheme
 
 @OptIn(ExperimentalFoundationApi::class)
@@ -96,7 +98,7 @@ fun DeviceCard(
             )
             Spacer(modifier = Modifier.height(2.dp))
             Text(
-                text = if (isOnline) "Online" else "Offline",
+                text = if (isOnline) stringResource(R.string.status_online) else stringResource(R.string.status_offline),
                 color = if (isOnline) Color(0xFF05DF72) else Color(0xFF64748B),
                 fontSize = 12.sp
             )
@@ -113,7 +115,7 @@ fun DeviceCard(
         }
         DropdownMenu(expanded = showMenu, onDismissRequest = { showMenu = false }) {
             DropdownMenuItem(
-                text = { Text("Unsync device", color = Color(0xFFEF4444)) },
+                text = { Text(stringResource(R.string.action_unsync), color = Color(0xFFEF4444)) },
                 leadingIcon = {
                     Icon(
                         imageVector = Icons.Default.Delete,

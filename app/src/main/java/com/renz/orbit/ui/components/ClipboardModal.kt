@@ -21,6 +21,9 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
+import androidx.compose.ui.res.stringResource
+import com.renz.orbit.R
+
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
 fun ClipboardModal(
@@ -43,7 +46,7 @@ fun ClipboardModal(
                 .padding(24.dp)
         ) {
             Text(
-                text = "Sync Clipboard",
+                text = stringResource(R.string.title_sync_clipboard),
                 color = Color.White,
                 fontSize = 18.sp,
                 fontWeight = FontWeight.Bold
@@ -55,7 +58,7 @@ fun ClipboardModal(
                 value = clipboardText,
                 onValueChange = onTextChange,
                 modifier = Modifier.fillMaxWidth(),
-                placeholder = { Text("Tulis atau tempel teks...", color = Color(0xFF64748B)) },
+                placeholder = { Text(stringResource(R.string.hint_clipboard), color = Color(0xFF64748B)) },
                 colors = OutlinedTextFieldDefaults.colors(
                     focusedBorderColor = Color(0xFF05DF72),
                     unfocusedBorderColor = Color(0xFF242C3D),
@@ -74,7 +77,7 @@ fun ClipboardModal(
                 shape = RoundedCornerShape(12.dp)
             ) {
                 Text(
-                    text = "Kirim Clipboard ke PC",
+                    text = stringResource(R.string.btn_send_to_pc),
                     color = Color.White,
                     fontWeight = FontWeight.Bold,
                     modifier = Modifier.padding(vertical = 4.dp)

@@ -15,6 +15,8 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.material3.Scaffold
+import androidx.compose.material3.SnackbarHost
+import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -23,10 +25,12 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import com.renz.orbit.R
 import com.renz.orbit.service.Device
 import com.renz.orbit.ui.components.DeviceCard
 import com.renz.orbit.ui.components.HeaderHomeScreen
@@ -41,15 +45,25 @@ fun HomeScreen(
     onSendFile: (Device) -> Unit = {},
     onSyncClipboard: (Device) -> Unit = {},
     onUnsyncDevice: (Device) -> Unit = {},
+    onAccountClick: () -> Unit = {},
     modifier: Modifier
 ) {
     var selectedDevice by remember { mutableStateOf<Device?>(null) }
+    val snackbarHostState = remember { SnackbarHostState() }
+
+    val sortedDevices = remember(devices) {
+        devices.sortedByDescending { it.status.lowercase() == "online" }
+    }
 
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            HeaderHomeScreen(modifier = Modifier)
-        }) { innerPadding ->
+            HeaderHomeScreen(onAccountClick, modifier = Modifier)
+        },
+        snackbarHost = {
+            SnackbarHost(hostState = snackbarHostState)
+        }
+    ) { innerPadding ->
         Column(
             modifier = Modifier
                 .fillMaxSize()
@@ -59,7 +73,7 @@ fun HomeScreen(
             StatusBanner(isOrbitActive)
             Spacer(modifier = Modifier.height(12.dp))
             Text(
-                text = "Available Devices", color = Color(0xFF94A3B8),
+                text = stringResource(R.string.available_devices), color = Color(0xFF94A3B8),
                 fontSize = 13.sp,
                 fontWeight = FontWeight.Medium,
                 modifier = Modifier.padding(bottom = 8.dp)
@@ -73,14 +87,14 @@ fun HomeScreen(
                 if (devices.isEmpty()) {
                     item {
                         Text(
-                            text = "No other devices found",
+                            text = stringResource(R.string.msg_no_devices),
                             color = Color(0xFF64748B),
                             fontSize = 12.sp,
                             modifier = Modifier.padding(vertical = 12.dp)
                         )
                     }
                 } else {
-                    items(devices) { device ->
+                    items(sortedDevices) { device ->
                         DeviceCard(
                             deviceName = device.deviceName,
                             status = device.status,
@@ -112,6 +126,7 @@ fun HomeScreen(
                         selectedDevice?.let { onSyncClipboard(it) }
                     },
                     enable = selectedDevice?.status?.lowercase() == "online",
+                    snackbarHostState = snackbarHostState,
                     modifier = Modifier.padding(bottom = 24.dp)
                 )
             }

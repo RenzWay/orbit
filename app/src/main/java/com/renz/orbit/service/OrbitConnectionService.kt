@@ -110,7 +110,7 @@ class OrbitConnectionService : Service() {
                 val activeId = OrbitRuntime.activeConnectionDeviceId.value
                 val deviceName =
                     OrbitRuntime.devices.value.find { it.id == activeId }?.deviceName ?: "PC"
-                updateNotification("Tersambung ke $deviceName")
+                updateNotification("Connected to $deviceName")
             } else {
                 updateNotification()
             }
@@ -137,13 +137,13 @@ class OrbitConnectionService : Service() {
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
             val channel = NotificationChannel(
                 CHANNEL_ID,
-                "Orbit — Status Latar Belakang",
+                "Orbit — Status background service",
                 // IMPORTANCE_LOW = muncul di status bar TAPI ga bunyi/getar/
                 // nyembul (heads-up). Ini yang bikin "senyap" kayak yang
                 // kamu maksud kemarin.
                 NotificationManager.IMPORTANCE_LOW
             ).apply {
-                description = "Menjaga Orbit tetap terhubung & siap menerima kiriman"
+                description = "Keep Orbit connected and ready to receive shipments"
             }
             val manager = getSystemService(NotificationManager::class.java)
             manager.createNotificationChannel(channel)
@@ -154,10 +154,10 @@ class OrbitConnectionService : Service() {
             PendingIntent.FLAG_IMMUTABLE
         )
 
-        val contentText = statusText ?: "Siap menerima file & clipboard dari device lain"
+        val contentText = statusText ?: "Ready to receive files and clipboard content from other devices"
 
         return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Orbit aktif")
+            .setContentTitle("Orbit active")
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_orbit)
             .setContentIntent(openIntent)

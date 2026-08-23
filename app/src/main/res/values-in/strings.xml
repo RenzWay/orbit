@@ -1,0 +1,46 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="app_name">Orbit</string>
+
+    <!-- Navigasi -->
+    <string name="nav_home">Beranda</string>
+    <string name="nav_profile">Profil</string>
+
+    <!-- Clipboard -->
+    <string name="title_sync_clipboard">Sinkronkan Clipboard</string>
+    <string name="hint_clipboard">Tulis atau tempel teks…</string>
+    <string name="btn_send_to_pc">Kirim Clipboard ke PC</string>
+
+    <!-- Status Perangkat -->
+    <string name="status_online">Online</string>
+    <string name="status_offline">Offline</string>
+    <string name="action_unsync">Putuskan sinkronisasi</string>
+
+    <!-- Header Beranda -->
+    <string name="title_my_device">Perangkat Saya</string>
+    <string name="desc_account">Akun</string>
+
+    <!-- Aksi Cepat -->
+    <string name="title_quick_action">Aksi cepat</string>
+    <string name="action_send_file">Kirim File</string>
+    <string name="action_sync_clipboard">Sinkronkan clipboard</string>
+    <string name="msg_device_offline">Perangkat ini sedang offline</string>
+
+    <!-- Banner Status -->
+    <string name="orbit_online">Orbit sedang online</string>
+    <string name="orbit_offline">Orbit sedang Offline</string>
+    <string name="desc_wifi">Status Wifi</string>
+
+    <!-- Layar Beranda -->
+    <string name="available_devices">Perangkat yang Tersedia</string>
+    <string name="msg_no_devices">Tidak ada perangkat lain ditemukan</string>
+
+    <!-- Login -->
+    <string name="welcome_to">Selamat datang di</string>
+    <string name="btn_login">Masuk</string>
+    <string name="btn_login_google">Masuk dengan Google</string>
+
+    <!-- Pengaturan -->
+    <string name="msg_coming_soon">Belum ada apa-apa, segera hadir</string>
+    <string name="undifiend_page">Nothing this screen</string>
+</resources>

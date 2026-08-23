@@ -28,6 +28,8 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.renz.orbit.R
 import com.renz.orbit.ui.theme.OrbitTheme
 
 @Composable
@@ -53,7 +55,7 @@ fun LoginPage(
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Text(
-                    text = "Welcome to ",
+                    text = stringResource(R.string.welcome_to),
                     color = Color.White,
                     fontSize = 22.sp,
                     fontWeight = FontWeight.Bold
@@ -71,7 +73,7 @@ fun LoginPage(
             // 2. Icon Login & Title
             Icon(
                 imageVector = Icons.Outlined.PersonAdd,
-                contentDescription = "Login Icon",
+                contentDescription = stringResource(R.string.btn_login), // Gunakan btn_login untuk desc juga
                 tint = Color.White,
                 modifier = Modifier.size(64.dp)
             )
@@ -79,7 +81,7 @@ fun LoginPage(
             Spacer(modifier = Modifier.height(8.dp))
 
             Text(
-                text = "Login",
+                text = stringResource(R.string.btn_login),
                 color = Color.White,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
@@ -111,7 +113,7 @@ fun LoginPage(
                     )
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
-                        text = "Login with google",
+                        text = stringResource(R.string.btn_login_google),
                         color = Color.White,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium

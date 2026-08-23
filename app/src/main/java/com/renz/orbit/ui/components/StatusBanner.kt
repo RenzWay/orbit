@@ -23,6 +23,8 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import androidx.compose.ui.res.stringResource
+import com.renz.orbit.R
 import com.renz.orbit.ui.theme.OrbitTheme
 
 @Composable
@@ -45,7 +47,7 @@ fun StatusBanner(isActive: Boolean, modifier: Modifier = Modifier) {
     ) {
         Icon(
             imageVector = if (isActive) Icons.Default.Wifi else Icons.Default.WifiOff,
-            contentDescription = "Status wifi",
+            contentDescription = stringResource(R.string.desc_wifi),
             tint = contentColor,
             modifier = Modifier.size(18.dp)
         )
@@ -53,7 +55,7 @@ fun StatusBanner(isActive: Boolean, modifier: Modifier = Modifier) {
         Spacer(modifier = Modifier.width(10.dp))
 
         Text(
-            text = if (isActive) "Orbit is online" else "Orbit is Offline",
+            text = if (isActive) stringResource(R.string.orbit_online) else stringResource(R.string.orbit_offline),
             color = contentColor,
             fontSize = 12.sp,
             fontWeight = FontWeight.Medium

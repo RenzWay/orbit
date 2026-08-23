@@ -1,3 +1,45 @@
 <resources>
     <string name="app_name">Orbit</string>
+
+    <!-- Navigation -->
+    <string name="nav_home">Home</string>
+    <string name="nav_profile">Profile</string>
+
+    <!-- Clipboard -->
+    <string name="title_sync_clipboard">Sync Clipboard</string>
+    <string name="hint_clipboard">Type or paste text...</string>
+    <string name="btn_send_to_pc">Send Clipboard to PC</string>
+
+    <!-- Device Status -->
+    <string name="status_online">Online</string>
+    <string name="status_offline">Offline</string>
+    <string name="action_unsync">Unsync device</string>
+
+    <!-- Home Header -->
+    <string name="title_my_device">My Device</string>
+    <string name="desc_account">Account</string>
+
+    <!-- Quick Actions -->
+    <string name="title_quick_action">Quick action</string>
+    <string name="action_send_file">Send File</string>
+    <string name="action_sync_clipboard">Sync clipboard</string>
+    <string name="msg_device_offline">This device is currently offline</string>
+
+    <!-- Status Banner -->
+    <string name="orbit_online">Orbit is online</string>
+    <string name="orbit_offline">Orbit is Offline</string>
+    <string name="desc_wifi">Wifi Status</string>
+
+    <!-- Home Screen -->
+    <string name="available_devices">Available Devices</string>
+    <string name="msg_no_devices">No other devices found</string>
+
+    <!-- Login -->
+    <string name="welcome_to">Welcome to</string>
+    <string name="btn_login">Login</string>
+    <string name="btn_login_google">Login with Google</string>
+
+    <!-- Settings -->
+    <string name="msg_coming_soon">Nothing here, coming soon</string>
+    <string name="undifiend_page">Nothing this screen</string>
 </resources>
