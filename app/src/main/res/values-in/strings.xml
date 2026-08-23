@@ -42,5 +42,9 @@
 
     <!-- Pengaturan -->
     <string name="msg_coming_soon">Belum ada apa-apa, segera hadir</string>
-    <string name="undifiend_page">Nothing this screen</string>
+    <string name="undifiend_page">Tidak ada apa-apa disini</string>
+    <string name="account_icon_text">Akun</string>
+    <string name="setting_icon_text">Pengaturan</string>
+    <string name="desc_settings">Pengaturan</string>
+    <string name="change_language">Ganti Bahasa</string>
 </resources>

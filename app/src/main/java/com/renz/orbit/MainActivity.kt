@@ -33,6 +33,8 @@ import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
+import androidx.compose.runtime.saveable.Saver
+import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -50,6 +52,7 @@ import com.renz.orbit.ui.components.ClipboardModal
 import com.renz.orbit.ui.navigation.Screen
 import com.renz.orbit.ui.screen.HomeScreen
 import com.renz.orbit.ui.screen.LoginPage
+import com.renz.orbit.ui.screen.ProfileScreen
 import com.renz.orbit.ui.screen.SettingScreen
 import com.renz.orbit.ui.theme.OrbitTheme
 import kotlinx.coroutines.launch
@@ -57,6 +60,18 @@ import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
+import java.util.Locale
+
+val ScreenSaver = Saver<Screen, String>(
+    save = { it.route },
+    restore = { route ->
+        when (route) {
+            "setting" -> Screen.Setting
+            "profile" -> Screen.Profile
+            else -> Screen.Home
+        }
+    }
+)
 
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
@@ -91,6 +106,9 @@ class MainActivity : ComponentActivity() {
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
+
+        updateLocale()
+
         OrbitRuntime.init(this)
         authManager = AuthManager(this)
         val initialShareUris = extractShareUris(intent)
@@ -112,7 +130,11 @@ class MainActivity : ComponentActivity() {
                 var lastReportedPercent by remember { mutableIntStateOf(-1) }
                 var pendingSendTarget by remember { mutableStateOf<Device?>(null) }
                 var pendingShareUris by remember { mutableStateOf(initialShareUris) }
-                var currentScreen by remember { mutableStateOf<Screen>(Screen.Home) }
+                var currentScreen by rememberSaveable(stateSaver = ScreenSaver) {
+                    mutableStateOf<Screen>(
+                        Screen.Home
+                    )
+                }
 
                 pendingShareUrisState = { uris -> pendingShareUris = uris }
 
@@ -346,14 +368,23 @@ class MainActivity : ComponentActivity() {
                                 onAccountClick = {
                                     currentScreen = Screen.Profile
                                 },
+                                onSettingClick = {
+                                    currentScreen = Screen.Setting
+                                },
                                 modifier = Modifier
                             )
 
-                        is Screen.Profile ->{
-                            SettingScreen()
+                        is Screen.Setting -> {
+                            SettingScreen(onBack = { currentScreen = Screen.Home })
                         }
 
-                        else -> {Text(stringResource(R.string.undifiend_page))}
+                        is Screen.Profile -> {
+                            ProfileScreen(onBack = { currentScreen = Screen.Home })
+                        }
+
+                        else -> {
+                            Text(stringResource(R.string.undifiend_page))
+                        }
                     }
                     if (showClipboardModal) {
                         ClipboardModal(
@@ -429,6 +460,19 @@ class MainActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         handleIntent(intent)
+    }
+
+    private fun updateLocale() {
+        val pref = getSharedPreferences("Settings", MODE_PRIVATE)
+        val lang = pref.getString("lang", "en") ?: "en"
+
+        val locale = Locale(lang)
+        Locale.setDefault(locale)
+
+        val config = resources.configuration
+        config.setLocale(locale)
+
+        resources.updateConfiguration(config, resources.displayMetrics)
     }
 
     private fun handleIntent(intent: Intent?) {

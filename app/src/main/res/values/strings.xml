@@ -42,4 +42,8 @@
     <!-- Settings -->
     <string name="msg_coming_soon">Nothing here, coming soon</string>
     <string name="undifiend_page">Nothing this screen</string>
+    <string name="account_icon_text">Account</string>
+    <string name="setting_icon_text">Setting</string>
+    <string name="desc_settings">Setting</string>
+    <string name="change_language">Change Language</string>
 </resources>

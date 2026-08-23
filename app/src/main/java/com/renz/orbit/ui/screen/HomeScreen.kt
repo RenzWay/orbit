@@ -46,6 +46,7 @@ fun HomeScreen(
     onSyncClipboard: (Device) -> Unit = {},
     onUnsyncDevice: (Device) -> Unit = {},
     onAccountClick: () -> Unit = {},
+    onSettingClick: () -> Unit = {},
     modifier: Modifier
 ) {
     var selectedDevice by remember { mutableStateOf<Device?>(null) }
@@ -58,7 +59,7 @@ fun HomeScreen(
     Scaffold(
         modifier = Modifier.fillMaxSize(),
         topBar = {
-            HeaderHomeScreen(onAccountClick, modifier = Modifier)
+            HeaderHomeScreen(onAccountClick, onSettingClick, modifier = Modifier)
         },
         snackbarHost = {
             SnackbarHost(hostState = snackbarHostState)
