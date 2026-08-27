@@ -1,0 +1,10 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+
+    <style name="Theme.Orbit.Splash" parent="Theme.SplashScreen">
+        <item name="windowSplashScreenBackground">#18181b</item>
+        <item name="windowSplashScreenAnimatedIcon">@drawable/splash_orbit</item>
+        <item name="windowSplashScreenAnimationDuration">1000</item>
+        <item name="postSplashScreenTheme">@style/Theme.Orbit</item>
+    </style>
+</resources>

@@ -1,0 +1,22 @@
+<vector xmlns:android="http://schemas.android.com/apk/res/android"
+    android:width="108dp"
+    android:height="108dp"
+    android:viewportWidth="48"
+    android:viewportHeight="48"> <!-- Pakai tint putih biar maksa warnanya -->
+
+    <!-- Kita pakai path tunggal kayak awal tapi kasih fillType evenOdd biar detailnya gak ilang -->
+    <path
+        android:fillColor="#00a6f4"
+        android:pathData="M20.11,13.75C21.3,13.25 22.62,13 24,13c6.08,0 11,4.92 11,11s-4.92,11 -11,11S13,30.08 13,24c0,-1.38 0.25,-2.7 0.72,-3.92a4.5,4.5 0,0 0,1.73 1.1C15.16,22.07 15,23 15,24a9,9 0,0 0,9 9a9,9 0,0 0,9 -9a9,9 0,0 0,-9 -9c-1,0 -1.93,0.16 -2.82,0.45c-0.22,-0.62 -0.57,-1.21 -1.07,-1.7" />
+
+    <!-- Bagian Titik Kecil -->
+    <path
+        android:fillColor="#00a6f4"
+        android:pathData="M16.93,14.93a2,2 0,0 1,2 2a2,2 0,0 1,-2 2a2,2 0,0 1,-2 -2c0,-1.11 0.89,-2 2,-2" />
+
+    <!-- Bagian Lingkaran Tengah -->
+    <path
+        android:fillColor="#00a6f4"
+        android:pathData="M24,19a5,5 0,0 1,5 5a5,5 0,0 1,-5 5a5,5 0,0 1,-5 -5a5,5 0,0 1,5 -5" />
+
+</vector>

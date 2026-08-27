@@ -46,4 +46,10 @@
     <string name="setting_icon_text">Setting</string>
     <string name="desc_settings">Setting</string>
     <string name="change_language">Change Language</string>
+    <string name="choose_language">Choose language</string>
+    <string name="language">Language</string>
+    <string name="sending_progress">Sending...</string>
+    <string name="accept_progress">Accept...</string>
+    <string name="theme_title">Theme</string>
+    <string name="logout_desc">Log out from your account</string>
 </resources>

@@ -13,22 +13,21 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.RoundedCornerShape
-import androidx.compose.material.icons.Icons
-import androidx.compose.material.icons.outlined.PersonAdd
 import androidx.compose.material3.Button
 import androidx.compose.material3.ButtonDefaults
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.painterResource
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import com.renz.orbit.R
 import com.renz.orbit.ui.theme.OrbitTheme
 
@@ -40,7 +39,7 @@ fun LoginPage(
     Box(
         modifier = modifier
             .fillMaxSize()
-            .background(Color(0xFF0B0F1A)), // Dark Background Orbit
+            .background(MaterialTheme.colorScheme.background),
         contentAlignment = Alignment.Center
     ) {
         Column(
@@ -56,14 +55,13 @@ fun LoginPage(
             ) {
                 Text(
                     text = stringResource(R.string.welcome_to),
-                    color = Color.White,
-                    fontSize = 22.sp,
-                    fontWeight = FontWeight.Bold
+                    color = MaterialTheme.colorScheme.onBackground,
+                    style = MaterialTheme.typography.headlineSmall,
                 )
                 Text(
-                    text = "Orbit",
-                    color = Color(0xFF05DF72), // Hijau Neon Orbit
-                    fontSize = 22.sp,
+                    text = " Orbit",
+                    color = MaterialTheme.colorScheme.primary,
+                    style = MaterialTheme.typography.headlineMedium,
                     fontWeight = FontWeight.Bold
                 )
             }
@@ -72,9 +70,9 @@ fun LoginPage(
 
             // 2. Icon Login & Title
             Icon(
-                imageVector = Icons.Outlined.PersonAdd,
-                contentDescription = stringResource(R.string.btn_login), // Gunakan btn_login untuk desc juga
-                tint = Color.White,
+                painter = painterResource(R.drawable.ic_orbit),
+                contentDescription = stringResource(R.string.btn_login),
+                tint = Color(0xff00a6f4),
                 modifier = Modifier.size(64.dp)
             )
 
@@ -82,7 +80,7 @@ fun LoginPage(
 
             Text(
                 text = stringResource(R.string.btn_login),
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 28.sp,
                 fontWeight = FontWeight.Bold
             )
@@ -97,24 +95,26 @@ fun LoginPage(
                     .height(56.dp),
                 shape = RoundedCornerShape(16.dp),
                 colors = ButtonDefaults.buttonColors(
-                    containerColor = Color(0xFF161B26) // Card Background Dark
+                    containerColor = MaterialTheme.colorScheme.surfaceContainer,
+                    contentColor = MaterialTheme.colorScheme.onSurface
                 )
             ) {
                 Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.Center
                 ) {
-                    // Logo Google "G" SVG / Custom Text
-                    Text(
-                        text = "G",
-                        color = Color(0xFF4285F4), // Biru Google
-                        fontSize = 20.sp,
-                        fontWeight = FontWeight.Bold
+
+                    Icon(
+                        painter = painterResource(R.drawable.ic_google),
+                        contentDescription = "google icon",
+                        tint = Color.Unspecified,
+                        modifier = Modifier.size(24.dp)
                     )
+
                     Spacer(modifier = Modifier.width(12.dp))
                     Text(
                         text = stringResource(R.string.btn_login_google),
-                        color = Color.White,
+                        color = MaterialTheme.colorScheme.onBackground,
                         fontSize = 15.sp,
                         fontWeight = FontWeight.Medium
                     )

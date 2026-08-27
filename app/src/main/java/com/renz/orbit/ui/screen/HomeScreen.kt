@@ -1,8 +1,10 @@
 package com.renz.orbit.ui.screen
 
 import androidx.compose.animation.AnimatedVisibility
+import androidx.compose.animation.expandVertically
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
@@ -31,11 +33,13 @@ import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import com.renz.orbit.R
+import com.renz.orbit.data.TransferStatus
 import com.renz.orbit.service.Device
 import com.renz.orbit.ui.components.DeviceCard
 import com.renz.orbit.ui.components.HeaderHomeScreen
 import com.renz.orbit.ui.components.QuickActions
 import com.renz.orbit.ui.components.StatusBanner
+import com.renz.orbit.ui.components.TransferProgressCard
 import com.renz.orbit.ui.theme.OrbitTheme
 
 @Composable
@@ -47,6 +51,7 @@ fun HomeScreen(
     onUnsyncDevice: (Device) -> Unit = {},
     onAccountClick: () -> Unit = {},
     onSettingClick: () -> Unit = {},
+    transferStatus: TransferStatus? = null,
     modifier: Modifier
 ) {
     var selectedDevice by remember { mutableStateOf<Device?>(null) }
@@ -72,6 +77,21 @@ fun HomeScreen(
                 .padding(horizontal = 16.dp)
         ) {
             StatusBanner(isOrbitActive)
+            AnimatedVisibility(
+                visible = transferStatus != null,
+                enter = expandVertically() + fadeIn(),
+                exit = shrinkVertically() + fadeOut()
+            ) {
+                transferStatus?.let { status ->
+                    TransferProgressCard(
+                        fileName = status.fileName,
+                        progress = status.progress,
+                        isSending = status.isSending,
+                        modifier = Modifier.padding(vertical = 12.dp)
+                    )
+                }
+            }
+
             Spacer(modifier = Modifier.height(12.dp))
             Text(
                 text = stringResource(R.string.available_devices), color = Color(0xFF94A3B8),
@@ -109,7 +129,10 @@ fun HomeScreen(
                                     selectedDevice = null
                                 }
                                 onUnsyncDevice(device)
-                            })
+                            },
+
+                            platform = device.platform
+                        )
                     }
                 }
             }

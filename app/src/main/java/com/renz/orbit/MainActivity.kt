@@ -18,6 +18,7 @@ import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.foundation.clickable
+import androidx.compose.foundation.isSystemInDarkTheme
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.padding
@@ -41,7 +42,9 @@ import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
+import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
 import com.google.firebase.auth.FirebaseAuth
+import com.renz.orbit.data.TransferStatus
 import com.renz.orbit.notification.NotificationHelper
 import com.renz.orbit.service.AuthManager
 import com.renz.orbit.service.Device
@@ -104,7 +107,9 @@ class MainActivity : ComponentActivity() {
         }
     }
 
+
     override fun onCreate(savedInstanceState: Bundle?) {
+        installSplashScreen()
         super.onCreate(savedInstanceState)
 
         updateLocale()
@@ -113,8 +118,20 @@ class MainActivity : ComponentActivity() {
         authManager = AuthManager(this)
         val initialShareUris = extractShareUris(intent)
         handleIntent(intent)
+
         setContent {
-            OrbitTheme {
+            val prefSetting = getSharedPreferences("Settings", MODE_PRIVATE)
+            var themeSetting by remember {
+                mutableStateOf(prefSetting.getString("theme", "system") ?: "system")
+            }
+
+            val isdark = when (themeSetting) {
+                "dark" -> true
+                "light" -> false
+                else -> isSystemInDarkTheme()
+            }
+
+            OrbitTheme(darkTheme = isdark) {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
                 var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
@@ -135,6 +152,8 @@ class MainActivity : ComponentActivity() {
                         Screen.Home
                     )
                 }
+                var transferStatus by remember { mutableStateOf<TransferStatus?>(null) }
+
 
                 pendingShareUrisState = { uris -> pendingShareUris = uris }
 
@@ -193,6 +212,7 @@ class MainActivity : ComponentActivity() {
                                         lastReportedPercent = -1
                                         currentDownloadNotifId = NotificationHelper.newTransferId()
                                         try {
+                                            transferStatus = TransferStatus(fileName, 0f, false)
                                             if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
                                                 val values = ContentValues().apply {
                                                     put(
@@ -257,6 +277,7 @@ class MainActivity : ComponentActivity() {
                                                 isSending = false,
                                                 success = true
                                             )
+                                            transferStatus = null
                                         } catch (e: Exception) {
                                             Log.e(
                                                 "MainActivity",
@@ -298,6 +319,11 @@ class MainActivity : ComponentActivity() {
                                             percent,
                                             false
                                         )
+                                        transferStatus = TransferStatus(
+                                            currentDownloadName ?: "file",
+                                            percent / 100f,
+                                            false
+                                        )
                                     }
                                 }
                             } catch (e: Exception) {
@@ -313,7 +339,12 @@ class MainActivity : ComponentActivity() {
                     val targetDevice = pendingSendTarget
                     if (uri == null || targetDevice == null) return@rememberLauncherForActivityResult
                     scope.launch {
-                        TransferManager.sendFilesToDevice(context, targetDevice, listOf(uri))
+                        TransferManager.sendFilesToDevice(
+                            context,
+                            targetDevice,
+                            listOf(uri),
+                            onProgress = { transferStatus = it }
+                        )
                     }
                 }
 
@@ -371,11 +402,14 @@ class MainActivity : ComponentActivity() {
                                 onSettingClick = {
                                     currentScreen = Screen.Setting
                                 },
+                                transferStatus = transferStatus,
                                 modifier = Modifier
                             )
 
                         is Screen.Setting -> {
-                            SettingScreen(onBack = { currentScreen = Screen.Home })
+                            SettingScreen(
+                                onBack = { currentScreen = Screen.Home },
+                                onThemeChange = { newTheme -> themeSetting = newTheme })
                         }
 
                         is Screen.Profile -> {
@@ -429,7 +463,8 @@ class MainActivity : ComponentActivity() {
                                                             TransferManager.sendFilesToDevice(
                                                                 context,
                                                                 device,
-                                                                uris
+                                                                uris,
+                                                                onProgress = { transferStatus = it }
                                                             )
                                                         }
                                                     }

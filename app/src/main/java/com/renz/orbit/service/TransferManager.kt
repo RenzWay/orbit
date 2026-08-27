@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import com.renz.orbit.data.TransferStatus
 import com.renz.orbit.notification.NotificationHelper
 import org.json.JSONObject
 import kotlin.time.Duration.Companion.milliseconds
@@ -17,7 +18,12 @@ import kotlin.time.Duration.Companion.milliseconds
  */
 object TransferManager {
 
-    suspend fun sendFilesToDevice(context: Context, targetDevice: Device, uris: List<Uri>) {
+    suspend fun sendFilesToDevice(
+        context: Context,
+        targetDevice: Device,
+        uris: List<Uri>,
+        onProgress: (TransferStatus?) -> Unit = {}
+    ) {
         val webRtcManager = OrbitRuntime.webRtcManager
         val connectNotifId = NotificationHelper.newTransferId()
         try {
@@ -68,6 +74,8 @@ object TransferManager {
                     }
                     webRtcManager.sendData(meta.toString())
                     NotificationHelper.showTransferProgress(context, notifId, fileName, 0, true)
+                    onProgress(TransferStatus(fileName, 0f, true))
+
                     var bytesSent = 0L
                     var lastReportedPercent = -1
                     context.contentResolver.openInputStream(uri)?.use { inputStream ->
@@ -84,8 +92,8 @@ object TransferManager {
                             }
 
                             if (fileSize > 0) {
-                                val percent =
-                                    ((bytesSent * 100) / fileSize).toInt().coerceIn(0, 100)
+                                val progress = bytesSent.toFloat() / fileSize.toFloat()
+                                val percent = (progress * 100).toInt().coerceIn(0, 100)
                                 if (percent != lastReportedPercent) {
                                     lastReportedPercent = percent
                                     NotificationHelper.showTransferProgress(
@@ -95,6 +103,7 @@ object TransferManager {
                                         percent,
                                         true
                                     )
+                                    onProgress(TransferStatus(fileName, progress, true))
                                 }
                             }
                         }
@@ -119,10 +128,12 @@ object TransferManager {
                 }
             }
             webRtcManager.awaitBufferedAmountDrained()
+            onProgress(null)
         } catch (e: Exception) {
             Log.e("TransferManager", "Gagal kirim file: ${e.message}")
             webRtcManager.closeConnection()
             OrbitRuntime.setActiveConnection(null)
+            onProgress(null)
         }
     }
 

@@ -13,28 +13,35 @@ import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.WifiOff
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import com.renz.orbit.R
 import com.renz.orbit.ui.theme.OrbitTheme
 
 @Composable
 fun StatusBanner(isActive: Boolean, modifier: Modifier = Modifier) {
     val backgroundColor by animateColorAsState(
-        targetValue = if (isActive) Color(0xFF042B1A) else Color(0xFF2B0A0A),
+        targetValue = if (isActive)
+            MaterialTheme.colorScheme.primaryContainer.copy(alpha = 0.45f) // Hijau M3
+        else
+            MaterialTheme.colorScheme.errorContainer.copy(alpha = 0.45f),  // Merah M3
         label = "bgColor"
     )
+
     val contentColor by animateColorAsState(
-        targetValue = if (isActive) Color(0xFF05DF72) else Color(0xFFFF453A),
+        targetValue = if (isActive)
+            MaterialTheme.colorScheme.onPrimaryContainer // Teks/Ikon Hijau gelap di Terang, Hijau terang di Gelap
+        else
+            MaterialTheme.colorScheme.onErrorContainer,   // Teks Merah adaptif
         label = "contentColor"
     )
 

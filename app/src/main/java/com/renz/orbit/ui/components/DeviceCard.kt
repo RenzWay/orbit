@@ -17,11 +17,13 @@ import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CheckCircle
+import androidx.compose.material.icons.filled.Computer
 import androidx.compose.material.icons.filled.Delete
 import androidx.compose.material.icons.filled.PhoneAndroid
 import androidx.compose.material3.DropdownMenu
 import androidx.compose.material3.DropdownMenuItem
 import androidx.compose.material3.Icon
+import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
@@ -31,12 +33,13 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.res.stringResource
 import com.renz.orbit.R
 import com.renz.orbit.ui.theme.OrbitTheme
 
@@ -47,22 +50,61 @@ fun DeviceCard(
     status: String,
     isSelected: Boolean,
     onClick: () -> Unit,
+    modifier: Modifier = Modifier,
+    platform: String,
     onUnsync: () -> Unit = {},
-    modifier: Modifier = Modifier
 ) {
     var showMenu by remember { mutableStateOf(false) }
     val isOnline = status.lowercase() == "online"
-    val cardBg = if (isSelected) Color(0xFF1E293B) else Color(0xFF161B26)
-    val borderColor = if (isSelected) Color(0xFF05DF72) else Color.Transparent
+    val deviceIcon = when {
+        // Cek field platform
+        platform.lowercase() in listOf(
+            "windows",
+            "desktop",
+            "linux",
+            "macos"
+        ) -> Icons.Default.Computer
+
+        // BACKUP: Cek kalau di namanya ada tulisan Windows/Linux/PC
+        deviceName.lowercase().contains("windows") ||
+                deviceName.lowercase().contains("linux") ||
+                deviceName.lowercase().contains("pc") -> Icons.Default.Computer
+
+        else -> Icons.Default.PhoneAndroid
+    }
+
+    val bgBrush = if (isSelected) {
+        Brush.linearGradient(
+            colors = listOf(
+                MaterialTheme.colorScheme.surfaceContainerHigh,
+                MaterialTheme.colorScheme.primary.copy(alpha = 0.25f)
+            )
+        )
+    } else {
+        Brush.linearGradient(
+            colors = listOf(
+                MaterialTheme.colorScheme.surfaceContainerLow,
+                MaterialTheme.colorScheme.surfaceContainer
+            )
+        )
+    }
 
     Row(
         modifier = modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(16.dp))
-            .background(cardBg)
+            .background(bgBrush)
             .then(
-                if (isSelected) Modifier.border(1.dp, borderColor, RoundedCornerShape(16.dp))
-                else Modifier
+                if (isSelected) Modifier.border(
+                    width = 1.dp,
+                    brush = Brush.linearGradient(
+                        colors = listOf(
+                            MaterialTheme.colorScheme.primary,
+                            Color.Transparent
+                        )
+                    ),
+                    shape = RoundedCornerShape(16.dp)
+                ) else Modifier
             )
             .combinedClickable(
                 onClick = { onClick() },
@@ -75,11 +117,11 @@ fun DeviceCard(
         Box(
             modifier = Modifier
                 .size(40.dp)
-                .background(Color(0xFF242C3D), shape = CircleShape),
+                .background(MaterialTheme.colorScheme.background, shape = CircleShape),
             contentAlignment = Alignment.Center
         ) {
             Icon(
-                imageVector = Icons.Default.PhoneAndroid,
+                imageVector = deviceIcon,
                 contentDescription = null,
                 tint = if (isOnline) Color(0xFF05DF72) else Color(0xFF64748B),
                 modifier = Modifier.size(24.dp)
@@ -92,7 +134,7 @@ fun DeviceCard(
         Column(modifier = Modifier.weight(1f)) {
             Text(
                 text = deviceName,
-                color = Color.White,
+                color = MaterialTheme.colorScheme.onSurface,
                 fontSize = 14.sp,
                 fontWeight = FontWeight.SemiBold
             )
@@ -141,14 +183,19 @@ private fun DeviceCardPreview() {
                 deviceName = "Samsung S24 Ultra",
                 status = "Online",
                 isSelected = true,
-                onClick = {}
+                onClick = {},
+
+                platform = "windows",
+                onUnsync = {}
             )
             Spacer(modifier = Modifier.height(8.dp))
             DeviceCard(
                 deviceName = "iPhone 15 Pro",
                 status = "Offline",
                 isSelected = false,
-                onClick = {}
+                onClick = {},
+                platform = "windows",
+                onUnsync = {}
             )
         }
     }
