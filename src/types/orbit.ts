@@ -1,3 +1,5 @@
+import type { ReactNode } from "react";
+
 export interface Device {
   id: string;
   deviceName: string;
@@ -14,4 +16,15 @@ export type TransferState = {
 export type TransferProgressProps = {
   sendTransfer: TransferState | null;
   receiveTransfer: TransferState | null;
+};
+
+export type ContextMenuHomeProps = {
+  children: ReactNode;
+};
+
+export type DeviceCardProps = {
+  device: Device;
+  isSelected: boolean;
+  onSelect: (device: Device) => void;
+  onUnsync: (device: Device) => void;
 };

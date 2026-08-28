@@ -11,7 +11,7 @@ import {
 import { webRTCService } from "@/services/webrtcService";
 import type { TransferState } from "@/types/orbit";
 import { useEffect, useMemo, useRef, useState } from "react";
-import type { ChangeEvent, DragEvent } from "react";
+import type { ChangeEvent, DragEvent, MouseEvent } from "react";
 
 export function useHomePageHandlers(userId: string) {
   const [devices, setDevices] = useState<Device[]>([]);
@@ -28,12 +28,14 @@ export function useHomePageHandlers(userId: string) {
   const [receiveTransfer, setReceiveTransfer] = useState<TransferState | null>(
     null,
   );
+  const [appMenu, setAppMenu] = useState<{ x: number; y: number } | null>(null);
 
   const sendNotifIdRef = useRef<number | null>(null);
   const receiveNotifIdRef = useRef<number | null>(null);
   const remoteDeviceNameRef = useRef<string>("Device");
   const lastConnectAttemptRef = useRef<string | null>(null);
   const connectAttemptCooldownRef = useRef<number | null>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const currentUser = useMemo(
     () => (userId ? { uid: userId } : null),
@@ -269,6 +271,9 @@ export function useHomePageHandlers(userId: string) {
     const files = event.target.files;
     if (files && files.length > 0) {
       setStagedFiles((prev) => [...prev, ...Array.from(files)]);
+      setSendTransfer((current) =>
+        current?.status === "transferring" ? current : null,
+      );
     }
     event.target.value = "";
   };
@@ -298,6 +303,9 @@ export function useHomePageHandlers(userId: string) {
     const dropped = Array.from(event.dataTransfer.files);
     if (dropped.length > 0) {
       setStagedFiles((prev) => [...prev, ...dropped]);
+      setSendTransfer((current) =>
+        current?.status === "transferring" ? current : null,
+      );
     }
   };
 
@@ -308,7 +316,7 @@ export function useHomePageHandlers(userId: string) {
   const handleSendStagedFiles = async () => {
     if (stagedFiles.length === 0 || isSendingStaged) return;
     setIsSendingStaged(true);
-
+    setSendTransfer(null);
     const filesToSend = [...stagedFiles];
     setStagedFiles([]);
 
@@ -321,14 +329,14 @@ export function useHomePageHandlers(userId: string) {
         await webRTCService.waitForConnection();
         await webRTCService.sendFile(file);
       } catch (error) {
-        console.error("Gagal mengirim file via P2P:", error);
+        console.error("Failed send file via P2P:", error);
         if (sendNotifIdRef.current === notifId) {
           showTransferResult(
             notifId,
             file.name,
             true,
             false,
-            error instanceof Error ? error.message : "Gagal terhubung.",
+            error instanceof Error ? error.message : "Failed connected.",
           );
           sendNotifIdRef.current = null;
         }
@@ -336,6 +344,15 @@ export function useHomePageHandlers(userId: string) {
     }
 
     setIsSendingStaged(false);
+  };
+
+  const handleAppClick = (event: MouseEvent<HTMLElement>) => {
+    const target = event.target as HTMLElement;
+    if (target.closest("[data-device-card]")) return;
+
+    if (target.closest("button, input, label, a, [role='menuitem']")) return;
+
+    setAppMenu({ x: event.clientX, y: event.clientY });
   };
 
   const formatFileSize = (bytes: number): string => {
@@ -352,6 +369,7 @@ export function useHomePageHandlers(userId: string) {
   };
 
   return {
+    appMenu,
     devices,
     setDevices,
     selectedDevice,
@@ -379,7 +397,9 @@ export function useHomePageHandlers(userId: string) {
     handleDrop,
     handleRemoveStagedFile,
     handleSendStagedFiles,
+    handleAppClick,
     formatFileSize,
+    fileInputRef,
     onLogout,
   };
 }
