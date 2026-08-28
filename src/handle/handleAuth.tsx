@@ -5,7 +5,7 @@ function getErrorMessage(error: unknown, action: "login" | "logout") {
     return error.message;
   }
 
-  return `Gagal ${action === "login" ? "masuk" : "keluar"}. Silakan coba lagi.`;
+  return `Failed to ${action === "login" ? "log in" : "log out"}. Please try again.`;
 }
 
 export async function handleLogin() {

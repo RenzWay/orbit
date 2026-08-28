@@ -46,7 +46,7 @@ export default function OrbitMobile2() {
           className="absolute rounded-full flex items-center justify-center text-[10px]"
           style={{ width: 44, height: 44, background: "#1D2138", border: "1px solid #E8A54B44", fontFamily: "ui-monospace" }}
         >
-          KAMU
+          YOU
         </div>
         {/* satellites */}
         {satellites.map((s) => {
@@ -89,14 +89,14 @@ export default function OrbitMobile2() {
           </span>
         </div>
         <p className="text-[11px] mb-3" style={{ color: "#8B8E9E" }}>
-          {selected.status === "online" ? "Siap menerima file atau clipboard" : "Terakhir terlihat 2 jam lalu"}
+          {selected.status === "online" ? "Ready to receive files or clipboard" : "Last seen 2 hours ago"}
         </p>
         <div className="grid grid-cols-2 gap-2">
           <button
             className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[11px]"
             style={{ background: "#E8A54B", color: "#14172B" }}
           >
-            <Send size={12} /> Kirim file
+            <Send size={12} /> Send file
           </button>
           <button
             className="flex items-center justify-center gap-1.5 rounded-xl py-2.5 text-[11px]"
@@ -108,7 +108,7 @@ export default function OrbitMobile2() {
       </div>
 
       <p className="text-center text-[9px] mt-4" style={{ fontFamily: "ui-monospace", color: "#4E5266" }}>
-        1 SATELIT AKTIF · SINYAL STABIL
+        1 ACTIVE SATELLITE · STABLE SIGNAL
       </p>
     </div>
   );

@@ -9,6 +9,7 @@ import {
   showTransferResult,
 } from "@/notification/NotificationService";
 import { webRTCService } from "@/services/webrtcService";
+import type { TransferState } from "@/types/orbit";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { ChangeEvent, DragEvent } from "react";
 
@@ -23,6 +24,10 @@ export function useHomePageHandlers(userId: string) {
   const [stagedFiles, setStagedFiles] = useState<File[]>([]);
   const [isDraggingOver, setIsDraggingOver] = useState(false);
   const [isSendingStaged, setIsSendingStaged] = useState(false);
+  const [sendTransfer, setSendTransfer] = useState<TransferState | null>(null);
+  const [receiveTransfer, setReceiveTransfer] = useState<TransferState | null>(
+    null,
+  );
 
   const sendNotifIdRef = useRef<number | null>(null);
   const receiveNotifIdRef = useRef<number | null>(null);
@@ -73,24 +78,40 @@ export function useHomePageHandlers(userId: string) {
     };
 
     webRTCService.onReceiveProgress = (fileName, percent) => {
-      if (percent === 0 || receiveNotifIdRef.current === null) {
-        receiveNotifIdRef.current = newTransferId();
-      }
-      showTransferProgress(receiveNotifIdRef.current, fileName, percent, false);
+      setReceiveTransfer({
+        fileName,
+        progress: percent,
+        status: "transferring",
+      });
     };
 
     webRTCService.onReceiveComplete = (fileName, success, error) => {
+      setReceiveTransfer((current) => ({
+        fileName,
+        progress: success ? 100 : (current?.progress ?? 0),
+        status: success ? "completed" : "failed",
+        error,
+      }));
       const id = receiveNotifIdRef.current ?? newTransferId();
       showTransferResult(id, fileName, false, success, error);
       receiveNotifIdRef.current = null;
     };
 
     webRTCService.onSendProgress = (fileName, percent) => {
-      if (sendNotifIdRef.current === null) return;
-      showTransferProgress(sendNotifIdRef.current, fileName, percent, true);
+      setSendTransfer({
+        fileName,
+        progress: percent,
+        status: "transferring",
+      });
     };
 
     webRTCService.onSendComplete = (fileName, success, error) => {
+      setSendTransfer((current) => ({
+        fileName,
+        progress: success ? 100 : (current?.progress ?? 0),
+        status: success ? "completed" : "failed",
+        error,
+      }));
       const id = sendNotifIdRef.current;
       if (id !== null) {
         showTransferResult(id, fileName, true, success, error);
@@ -114,7 +135,7 @@ export function useHomePageHandlers(userId: string) {
     };
 
     webRTCService.onError = (message) => {
-      alert(`Gagal: ${message}`);
+      alert(`Error: ${message}`);
     };
 
     webRTCService.onConnectionStateChange = (connection) => {
@@ -228,7 +249,7 @@ export function useHomePageHandlers(userId: string) {
     if (!currentUser) return;
 
     const confirmed = window.confirm(
-      `Hapus "${device.deviceName}" dari daftar device? Device ini bakal hilang dari list, tapi kalau dia masih nyala dan online, bisa muncul lagi otomatis.`,
+      `Remove "${device.deviceName}" from your devices? It will disappear from the list, but may reappear automatically if it stays online.`,
     );
 
     if (!confirmed) return;
@@ -240,7 +261,7 @@ export function useHomePageHandlers(userId: string) {
       }
     } catch (error) {
       console.error("Gagal menghapus device:", error);
-      alert("Gagal menghapus device, coba lagi.");
+      alert("Failed to remove device. Please try again.");
     }
   };
 
@@ -346,6 +367,8 @@ export function useHomePageHandlers(userId: string) {
     isSendingStaged,
     currentUser,
     deviceInfo,
+    sendTransfer,
+    receiveTransfer,
     handleConnectP2P,
     handleRefreshConnection,
     handleRemoveDevice,

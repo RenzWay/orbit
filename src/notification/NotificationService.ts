@@ -28,8 +28,8 @@ export function newTransferId(): number {
 export function notifyDeviceConnected(deviceName: string) {
   void window.electronAPI.notify({
     id: hashId(`connected:${deviceName}`),
-    title: `${deviceName} terhubung`,
-    body: "Siap buat transfer file",
+    title: `${deviceName} connected`,
+    body: "Ready to transfer file",
     silent: true,
   });
 }
@@ -37,7 +37,7 @@ export function notifyDeviceConnected(deviceName: string) {
 export function notifyConnectionError(message: string) {
   void window.electronAPI.notify({
     id: hashId("connection-error"),
-    title: "Koneksi P2P bermasalah",
+    title: "Connection P2P is Trouble",
     body: message,
     silent: true,
   });

@@ -1,5 +1,6 @@
 ﻿import { DarkToggle } from "@/components/button/DarkToggle";
 import { ClipboardModal } from "@/components/other/ClipboardModal";
+import { TransferProgress } from "@/components/progress/TransferProgress";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
 import {
@@ -30,6 +31,8 @@ export default function HomePage({ userId }: { userId: string }) {
     stagedFiles,
     isDraggingOver,
     isSendingStaged,
+    sendTransfer,
+    receiveTransfer,
     handleConnectP2P,
     handleRefreshConnection,
     handleRemoveDevice,
@@ -58,53 +61,59 @@ export default function HomePage({ userId }: { userId: string }) {
         <div className="my-8">
           <h4 className="font-medium">Available devices</h4>
           <hr />
-          <ul className="list-none space-y-2">
+          <ul className="list-none space-y-2 my-4">
             {devices.length === 0 ? (
               <p className="text-xs text-neutral-500">No other devices found</p>
             ) : (
-              devices.map((device) => (
-                <ContextMenu key={device.id}>
-                  <ContextMenuTrigger asChild>
-                    <li
-                      onClick={() => setSelectedDevice(device)}
-                      className={`flex gap-4 items-center transition-all p-3 rounded-2xl cursor-pointer ${
-                        selectedDevice?.id === device.id
-                          ? "bg-sky-500/30 dark:bg-sky-800/60 border border-sky-400"
-                          : "bg-sky-500/10 hover:bg-sky-500/20"
-                      }`}>
-                      <Avatar className="w-10 h-10">
-                        <AvatarFallback>
-                          {device.deviceName.substring(0, 2).toUpperCase()}
-                        </AvatarFallback>
-                        <AvatarBadge
-                          className={
-                            device.status === "online"
-                              ? "bg-green-400"
-                              : "bg-gray-500"
-                          }
-                        />
-                      </Avatar>
-                      <div>
-                        <h4 className="font-semibold text-sm">
-                          {device.deviceName}
-                        </h4>
-                        <span
-                          className={`text-xs ${device.status === "online" ? "text-green-500" : "text-gray-400"}`}>
-                          {device.status}
-                        </span>
-                      </div>
-                    </li>
-                  </ContextMenuTrigger>
-                  <ContextMenuContent>
-                    <ContextMenuItem
-                      variant="destructive"
-                      onClick={() => handleRemoveDevice(device)}>
-                      <Trash2 />
-                      Unsync device
-                    </ContextMenuItem>
-                  </ContextMenuContent>
-                </ContextMenu>
-              ))
+              [...devices]
+                .sort((a, b) => {
+                  if (a.status === "online" && b.status !== "online") return -1;
+                  if (a.status !== "online" && b.status === "online") return 1;
+                  return 0;
+                })
+                .map((device) => (
+                  <ContextMenu key={device.id}>
+                    <ContextMenuTrigger asChild>
+                      <li
+                        onClick={() => setSelectedDevice(device)}
+                        className={`flex gap-4 items-center transition-all p-3 rounded-2xl cursor-pointer ${
+                          selectedDevice?.id === device.id
+                            ? "bg-sky-500/30 dark:bg-sky-800/60 border border-sky-400"
+                            : "bg-sky-500/10 hover:bg-sky-500/20"
+                        }`}>
+                        <Avatar className="w-10 h-10">
+                          <AvatarFallback>
+                            {device.deviceName.substring(0, 2).toUpperCase()}
+                          </AvatarFallback>
+                          <AvatarBadge
+                            className={
+                              device.status === "online"
+                                ? "bg-green-400"
+                                : "bg-gray-500"
+                            }
+                          />
+                        </Avatar>
+                        <div>
+                          <h4 className="font-semibold text-sm">
+                            {device.deviceName}
+                          </h4>
+                          <span
+                            className={`text-xs ${device.status === "online" ? "text-green-500" : "text-gray-400"}`}>
+                            {device.status}
+                          </span>
+                        </div>
+                      </li>
+                    </ContextMenuTrigger>
+                    <ContextMenuContent>
+                      <ContextMenuItem
+                        variant="destructive"
+                        onClick={() => handleRemoveDevice(device)}>
+                        <Trash2 />
+                        Unsync device
+                      </ContextMenuItem>
+                    </ContextMenuContent>
+                  </ContextMenu>
+                ))
             )}
           </ul>
         </div>
@@ -121,7 +130,7 @@ export default function HomePage({ userId }: { userId: string }) {
         </div>
       </aside>
 
-      <div className="flex-4 p-8 flex flex-col h-full">
+      <div className="flex-4 min-h-0 p-8 flex flex-col h-full">
         {selectedDevice ? (
           <>
             <header className="flex gap-3 items-center mb-4">
@@ -151,7 +160,7 @@ export default function HomePage({ userId }: { userId: string }) {
               </div>
             </header>
 
-            <div className="flex-1 flex flex-col gap-4 h-[calc(100vh-8rem)]">
+            <div className="flex-1 min-h-0 flex flex-col gap-4 h-[calc(100vh-8rem)]">
               <label
                 onDragEnter={handleDragEnter}
                 onDragOver={handleDragOver}
@@ -173,28 +182,30 @@ export default function HomePage({ userId }: { userId: string }) {
                 </div>
 
                 <p className="text-sm font-medium text-slate-300">
-                  Drop file buat {selectedDevice.deviceName} di sini, atau{" "}
+                  Drop a file for {selectedDevice.deviceName} here, or{" "}
                   <span className="text-sky-400 underline">
-                    klik buat pilih
+                    click to browse
                   </span>
                 </p>
                 <p className="text-xs text-slate-500 mt-1">
-                  Bisa lebih dari 1 file sekaligus — dikirim via WebRTC P2P
+                  Select multiple files at once — sent via WebRTC P2P
                 </p>
               </label>
 
-              {stagedFiles.length > 0 && (
+              {stagedFiles.length > 0 ? (
                 <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 max-h-56">
                   <div className="flex items-center justify-between">
                     <p className="text-xs font-medium text-slate-300">
-                      {stagedFiles.length} file siap dikirim
+                      {stagedFiles.length} file ready to send
                     </p>
+
                     <button
                       onClick={() => setStagedFiles([])}
                       className="text-xs text-slate-500 hover:text-red-400 transition-colors">
-                      Kosongkan
+                      Clear all
                     </button>
                   </div>
+
                   <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
                     {stagedFiles.map((file, index) => (
                       <div
@@ -204,10 +215,12 @@ export default function HomePage({ userId }: { userId: string }) {
                           <p className="text-xs text-slate-200 truncate">
                             {file.name}
                           </p>
+
                           <p className="text-[10px] text-slate-500">
                             {formatFileSize(file.size)}
                           </p>
                         </div>
+
                         <button
                           onClick={() => handleRemoveStagedFile(index)}
                           className="shrink-0 text-slate-500 hover:text-red-400 transition-colors">
@@ -216,6 +229,7 @@ export default function HomePage({ userId }: { userId: string }) {
                       </div>
                     ))}
                   </div>
+
                   <Button
                     onClick={handleSendStagedFiles}
                     disabled={
@@ -223,12 +237,18 @@ export default function HomePage({ userId }: { userId: string }) {
                     }
                     className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl h-11 gap-2 disabled:opacity-50">
                     <Send size={16} />
+
                     {isSendingStaged
-                      ? "Mengirim..."
+                      ? "Sending..."
                       : `Send ${stagedFiles.length} file`}
                   </Button>
                 </div>
-              )}
+              ) : sendTransfer || receiveTransfer ? (
+                <TransferProgress
+                  sendTransfer={sendTransfer}
+                  receiveTransfer={receiveTransfer}
+                />
+              ) : null}
 
               <div className="flex gap-3 justify-end items-center">
                 <Button

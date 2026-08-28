@@ -46,7 +46,7 @@ export default function OrbitMobile() {
       <div className="flex items-center justify-between mb-6 px-1 pt-2">
         <div>
           <p className="text-[11px] uppercase tracking-widest text-[#4DE8C7]/70">Orbit</p>
-          <h1 className="text-lg font-semibold text-white">Device kamu</h1>
+          <h1 className="text-lg font-semibold text-white">Your device</h1>
         </div>
         <button className="w-8 h-8 rounded-full bg-[#1C2333] flex items-center justify-center border border-white/5">
           <Settings size={15} className="text-[#8B93A7]" />
@@ -56,11 +56,11 @@ export default function OrbitMobile() {
       {/* Active status banner */}
       <div className="flex items-center gap-2 bg-[#12281F] border border-[#4DE8C7]/20 rounded-xl px-3 py-2 mb-5">
         <Wifi size={13} className="text-[#4DE8C7]" />
-        <p className="text-[11px] text-[#4DE8C7]">Orbit aktif, siap menerima file</p>
+        <p className="text-[11px] text-[#4DE8C7]">Orbit is active, ready to receive files</p>
       </div>
 
       {/* Device list */}
-      <p className="text-[11px] uppercase tracking-wider text-[#8B93A7] mb-2 px-1">Tersedia</p>
+      <p className="text-[11px] uppercase tracking-wider text-[#8B93A7] mb-2 px-1">Available</p>
       <div className="flex flex-col gap-2 mb-6">
         {devices.map((d) => (
           <button
@@ -85,11 +85,11 @@ export default function OrbitMobile() {
       </div>
 
       {/* Quick actions */}
-      <p className="text-[11px] uppercase tracking-wider text-[#8B93A7] mb-2 px-1">Aksi cepat</p>
+      <p className="text-[11px] uppercase tracking-wider text-[#8B93A7] mb-2 px-1">Quick actions</p>
       <div className="grid grid-cols-2 gap-2">
         <button className="flex flex-col items-center gap-2 bg-[#121826] border border-white/5 rounded-2xl py-4">
           <Send size={16} className="text-[#4DE8C7]" />
-          <span className="text-[11px] text-[#C7CCD9]">Kirim file</span>
+          <span className="text-[11px] text-[#C7CCD9]">Send file</span>
         </button>
         <button className="flex flex-col items-center gap-2 bg-[#121826] border border-white/5 rounded-2xl py-4">
           <Clipboard size={16} className="text-[#FF6B4A]" />
@@ -109,7 +109,7 @@ export default function OrbitMobile() {
           onClick={() => setTab("history")}
           className={`text-[11px] flex items-center gap-1 ${tab === "history" ? "text-[#4DE8C7]" : "text-[#5A6274]"}`}
         >
-          <FileText size={11} /> Riwayat
+          <FileText size={11} /> History
         </button>
       </div>
     </div>

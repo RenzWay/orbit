@@ -13,7 +13,7 @@
   "build": {
     "appId": "com.renz.orbit",
     "productName": "Orbit",
-    "compression": "maximum",
+    "compression": "normal",
     "protocols": [
       {
         "name": "Orbit Protocol",
@@ -33,8 +33,7 @@
     "win": {
       "icon": "public/elec_icon.png",
       "target": [
-        "nsis",
-        "zip"
+        "nsis"
       ]
     },
     "mac": {
