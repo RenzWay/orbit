@@ -5,26 +5,18 @@ import { ClipboardModal } from "@/components/other/ClipboardModal";
 import { TransferProgress } from "@/components/progress/TransferProgress";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
-import {
-  ContextMenu,
-  ContextMenuContent,
-  ContextMenuItem,
-  ContextMenuTrigger,
-} from "@/components/ui/context-menu";
 import { useHomePageHandlers } from "@/handle/handleHomepage";
 import {
   LogOut,
   MonitorX,
   RefreshCw,
   Send,
-  Trash2,
   UploadCloud,
   X,
 } from "lucide-react";
 
 export default function HomePage({ userId }: { userId: string }) {
   const {
-    appMenu,
     devices,
     selectedDevice,
     clipboardHistory,
