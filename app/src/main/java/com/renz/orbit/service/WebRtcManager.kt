@@ -191,6 +191,27 @@ class WebRtcManager(private val context: Context) {
         if (!wifiLock.isHeld) wifiLock.acquire()
         markActivity()
 
+//        val iceServers = listOf(
+//            PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
+//            PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
+//            PeerConnection.IceServer.builder("stun:stun.relay.metered.ca:80").createIceServer(),
+//            PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80")
+//                .setUsername("29ec60b074c065441068d3a4")
+//                .setPassword("xT+9q1umVQZvpsyT")
+//                .createIceServer(),
+//            PeerConnection.IceServer.builder("turn:global.relay.metered.ca:80?transport=tcp")
+//                .setUsername("29ec60b074c065441068d3a4")
+//                .setPassword("xT+9q1umVQZvpsyT")
+//                .createIceServer(),
+//            PeerConnection.IceServer.builder("turn:global.relay.metered.ca:443")
+//                .setUsername("29ec60b074c065441068d3a4")
+//                .setPassword("xT+9q1umVQZvpsyT")
+//                .createIceServer(),
+//            PeerConnection.IceServer.builder("turns:global.relay.metered.ca:443?transport=tcp")
+//                .setUsername("29ec60b074c065441068d3a4")
+//                .setPassword("xT+9q1umVQZvpsyT")
+//                .createIceServer()
+//        )
         val iceServers = listOf(
             PeerConnection.IceServer.builder("stun:stun.l.google.com:19302").createIceServer(),
             PeerConnection.IceServer.builder("stun:stun1.l.google.com:19302").createIceServer(),
