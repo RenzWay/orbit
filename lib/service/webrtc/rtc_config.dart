@@ -1,6 +1,6 @@
 class RtcConfig {
   static const Map<String, dynamic> peerConnection = {
-    'iceServer': [
+    'iceServers': [
       {
         'urls': [
           'stun:stun.l.google.com:19302',

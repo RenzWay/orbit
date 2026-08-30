@@ -1,20 +1,21 @@
 import 'dart:async';
 import 'dart:typed_data';
 
+import 'connection_service.dart';
+import 'connection_session.dart';
+import 'ice_candidate.dart';
+import 'ice_candidate_queue.dart';
+import 'rtc_config.dart';
+
 import 'package:flutter_webrtc/flutter_webrtc.dart';
 import 'package:orbit/service/messaging/message_router.dart';
-import 'package:orbit/service/webrtc/connection_service.dart';
-import 'package:orbit/service/webrtc/connection_session.dart';
-import 'package:orbit/service/webrtc/ice_candidate.dart';
-import 'package:orbit/service/webrtc/rtc_config.dart';
 import 'package:orbit/service/webrtc/session_description.dart';
 import 'package:orbit/service/webrtc/webrtc_connection_state.dart';
 
 class WebrtcService {
   final ConnectionService _connectionService;
   final router = MessageRouter();
-
-  final List<IceCandidate> _candidateQueue = <IceCandidate>[];
+  final IceCandidateQueue _candidateQueue = IceCandidateQueue();
 
   bool _remoteDescriptionSet = false;
 
@@ -85,12 +86,9 @@ class WebrtcService {
   }
 
   Future<void> _flushPendingCandidates() async {
-    _remoteDescriptionSet = true;
+    _candidateQueue.markRemoteDescriptionSet();
 
-    final pendingCandidates = List<IceCandidate>.from(_candidateQueue);
-    _candidateQueue.clear();
-
-    for (final candidate in pendingCandidates) {
+    for (final candidate in _candidateQueue.takePending()) {
       await _addRemoteCandidate(candidate);
     }
   }

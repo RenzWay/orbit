@@ -2,17 +2,17 @@ import 'package:orbit/service/webrtc/connection_id_generator.dart';
 import 'package:orbit/service/webrtc/connection_session.dart';
 import 'package:orbit/service/webrtc/ice_candidate.dart';
 import 'package:orbit/service/webrtc/session_description.dart';
-import 'package:orbit/service/webrtc/signaling_sevice.dart';
+import 'package:orbit/service/webrtc/signaling_service.dart';
 
 class ConnectionService {
   final ConnectionIdGenerator _idGenerator;
-  final SignalingSevice _signalingService;
+  final SignalingService _signalingService;
 
   ConnectionService({
     ConnectionIdGenerator? idGenerator,
-    SignalingSevice? signalingService,
+    SignalingService? signalingService,
   }) : _idGenerator = idGenerator ?? ConnectionIdGenerator(),
-       _signalingService = signalingService ?? SignalingSevice();
+       _signalingService = signalingService ?? SignalingService();
 
   Stream<SessionDescription> watchOffer(ConnectionSession session) {
     return _signalingService

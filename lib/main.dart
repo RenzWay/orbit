@@ -5,15 +5,7 @@ import 'package:orbit/firebase_options.dart';
 import 'package:orbit/service/device/orbit_device_service.dart';
 
 Future<void> main() async {
-  WidgetsFlutterBinding.ensureInitialized();
 
-  await Firebase.initializeApp(options: DefaultFirebaseOptions.currentPlatform);
-
-  final deviceService = OrbitDeviceService();
-
-  await deviceService.registerCurrentDevice();
-
-  print('DEVICE REGISTERED');
 
   runApp(const OrbitApp());
 }

@@ -1,9 +1,9 @@
 import 'package:firebase_database/firebase_database.dart';
 
-class SignalingSevice {
+class SignalingService {
   final FirebaseDatabase _database;
 
-  SignalingSevice({FirebaseDatabase? database})
+  SignalingService({FirebaseDatabase? database})
     : _database = database ?? FirebaseDatabase.instance;
 
   DatabaseReference _connectionReference({
