@@ -13,6 +13,7 @@ dependencies:
   firebase_database: ^12.5.0
   flutter:
     sdk: flutter
+  flutter_webrtc: ^1.6.0
   google_sign_in: ^7.2.0
   shared_preferences: ^2.5.5
   uuid: ^4.6.0
