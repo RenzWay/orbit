@@ -16,10 +16,9 @@ class ClipboardService {
   StreamSubscription? _subscription;
 
   ClipboardService({
-    required WebrtcService webRtcService,
+    required this._webRtcService,
     required MessageRouter router,
-  }) : _webRtcService = webRtcService,
-       _router = router;
+  }) : _router = router;
 
   Stream<String> get receivedStream => _receivedController.stream;
 

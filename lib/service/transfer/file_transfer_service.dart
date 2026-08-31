@@ -21,7 +21,7 @@ class FileTransferService {
   FileTransferService({required WebrtcService webRtcService})
     : _webrtcService = webRtcService;
 
-  FileReceiver _receiver = FileReceiver();
+  final FileReceiver _receiver = FileReceiver();
 
   Stream<TransferState> get stateStream => _stateController.stream;
 

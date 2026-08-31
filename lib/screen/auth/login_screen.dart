@@ -1,8 +1,11 @@
 import 'package:flutter/material.dart';
-import 'package:flutter/material.dart';
+import 'package:orbit/screen/auth/auth_controller.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends StatelessWidget {
-  const LoginScreen({super.key});
+  LoginScreen({super.key});
+
+  final AuthController _authController = AuthController();
 
   @override
   Widget build(BuildContext context) {
@@ -30,8 +33,15 @@ class LoginScreen extends StatelessWidget {
                   Expanded(
                     flex: 5,
                     child: _LoginContent(
-                      onLogin: () {
-                        Navigator.pushReplacementNamed(context, '/home');
+                      onLogin: () async {
+                        final uri = Uri.parse(
+                          'https://letter-26c71.firebaseapp.com/auth.html',
+                        );
+
+                        await launchUrl(
+                          uri,
+                          mode: LaunchMode.externalApplication,
+                        );
                       },
                     ),
                   ),
