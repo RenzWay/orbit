@@ -13,11 +13,13 @@ class AuthController {
 
   AuthService get authService => _authService;
 
-  Future<void> initialize() async {
+  Future<void> initialize({required void Function() onLoginSuccess}) async {
     await _authService.restoreSession();
 
     _deepLinkService.listen((idToken) async {
       await _authService.signInWithGoogleIdToken(idToken);
+
+      onLoginSuccess();
     });
   }
 

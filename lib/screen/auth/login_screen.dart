@@ -1,11 +1,9 @@
 import 'package:flutter/material.dart';
-import 'package:orbit/screen/auth/auth_controller.dart';
+
 import 'package:url_launcher/url_launcher.dart';
 
 class LoginScreen extends StatelessWidget {
-  LoginScreen({super.key});
-
-  final AuthController _authController = AuthController();
+  const LoginScreen({super.key});
 
   @override
   Widget build(BuildContext context) {
@@ -101,7 +99,7 @@ class _LoginContent extends StatelessWidget {
 
           const SizedBox(height: 20),
           SizedBox(
-            width: 180,
+            width: 220,
             height: 38,
             child: FilledButton(
               onPressed: onLogin,

@@ -1,0 +1,12 @@
+display_name: Orbit
+package_name: orbit
+maintainer:
+  name: Renzway
+  email: renzway@example.com
+description: Orbit - seamless device-to-device communication
+homepage: https://letter-26c71.firebaseapp.com
+version: 0.1.0
+architecture: x64
+section: utils
+priority: optional
+installed_size: 200000

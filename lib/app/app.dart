@@ -1,3 +1,5 @@
+import 'dart:async';
+
 import 'package:flutter/material.dart';
 import 'package:orbit/core/theme/app_theme.dart';
 import 'package:orbit/screen/auth/auth_controller.dart';
@@ -13,6 +15,7 @@ class OrbitApp extends StatefulWidget {
 
 class _OrbitAppState extends State<OrbitApp> {
   final AuthController _authController = AuthController();
+  StreamSubscription<bool>? _loginSubcription;
 
   @override
   void initState() {
@@ -22,11 +25,20 @@ class _OrbitAppState extends State<OrbitApp> {
   }
 
   Future<void> _initializeAuth() async {
-    await _authController.initialize();
+    await _authController.initialize(
+      onLoginSuccess: () {
+        if (!mounted) {
+          return;
+        }
+
+        Navigator.of(context).pushReplacementNamed('/home');
+      },
+    );
   }
 
   @override
   void dispose() {
+    _loginSubcription?.cancel();
     _authController.dispose();
 
     super.dispose();
@@ -45,7 +57,7 @@ class _OrbitAppState extends State<OrbitApp> {
       initialRoute: '/login',
 
       routes: {
-        '/login': (context) => LoginScreen(),
+        '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
       },
     );

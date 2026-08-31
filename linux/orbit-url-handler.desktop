@@ -1,0 +1,6 @@
+[Desktop Entry]
+Name=Orbit Url Handler
+Exec=orbit %u
+Type=Application
+NoDisplay=true
+Mimetype=x-scheme-handler/orbit;
