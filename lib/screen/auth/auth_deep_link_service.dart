@@ -25,7 +25,10 @@ class AuthDeepLinkService {
     });
   }
 
-  void _handleUri(Uri uri, void Function(String idToken) onTokenReceived) {
+  void _handleUri(
+    Uri uri,
+    void Function(String idToken) onTokenReceived,
+  ) {
     if (uri.scheme != _scheme) {
       return;
     }

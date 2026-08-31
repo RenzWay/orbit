@@ -10,3 +10,5 @@ architecture: x64
 section: utils
 priority: optional
 installed_size: 200000
+supported_mime_type:
+  - x-scheme-handler/orbit
