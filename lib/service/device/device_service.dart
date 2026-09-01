@@ -43,31 +43,29 @@ class DeviceService {
 
   Stream<List<Device>> watchDevices(String userId) {
     return _presenceService.watchDevices(userId).map((event) {
-      final value = event.snapshot.value;
+      final devices = <Device>[];
+      final data = event.snapshot.value;
 
-      if (value == null || value is! Map) {
-        return <Device>[];
+      if (data is! Map) {
+        return devices;
       }
 
-      final devices = <Device>[];
-
-      for (final entry in value.entries) {
+      for (final entry in data.entries) {
         final deviceId = entry.key.toString();
-        final data = entry.value;
+        final deviceData = entry.value;
 
-        if (data is! Map) {
+        if (deviceData is! Map) {
           continue;
         }
-
-        final status = data['status'] == 'online'
-            ? DeviceStatus.online
-            : DeviceStatus.offline;
 
         devices.add(
           Device(
             id: deviceId,
-            deviceName: data['deviceName']?.toString() ?? 'Unknown Device',
-            status: status,
+            deviceName:
+                deviceData['deviceName']?.toString() ?? 'Unknown Device',
+            status: deviceData['status'] == 'online'
+                ? DeviceStatus.online
+                : DeviceStatus.offline,
           ),
         );
       }
