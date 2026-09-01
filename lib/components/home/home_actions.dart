@@ -1,7 +1,18 @@
 import 'package:flutter/material.dart';
+import 'package:orbit/screen/home/clipboard_dialog.dart';
+import 'package:orbit/service/clipboard/clipboard_service.dart';
 
 class HomeActions extends StatelessWidget {
-  const HomeActions({super.key});
+  final VoidCallback onPickFiles;
+  final Future<void> Function() onSendFiles;
+  final ClipboardService clipboardService;
+
+  const HomeActions({
+    super.key,
+    required this.onPickFiles,
+    required this.onSendFiles,
+    required this.clipboardService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -9,7 +20,7 @@ class HomeActions extends StatelessWidget {
       children: [
         Expanded(
           child: FilledButton.icon(
-            onPressed: () {},
+            onPressed: onPickFiles,
             icon: const Icon(Icons.send, size: 16),
             label: const Text('Send Files'),
           ),
@@ -19,7 +30,13 @@ class HomeActions extends StatelessWidget {
 
         Expanded(
           child: OutlinedButton.icon(
-            onPressed: () {},
+            onPressed: () {
+              showDialog(
+                context: context,
+                builder: (_) =>
+                    ClipboardDialog(clipboardService: clipboardService),
+              );
+            },
             icon: const Icon(Icons.content_copy, size: 16),
             label: const Text('Clipboard'),
           ),

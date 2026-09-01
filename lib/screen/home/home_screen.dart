@@ -4,8 +4,9 @@ import 'package:flutter/material.dart';
 import 'package:orbit/components/home/home_header.dart';
 import 'package:orbit/components/home/home_sidebar.dart';
 import 'package:orbit/components/home/home_workspace.dart';
-import 'package:orbit/models/device.dart';
 import 'package:orbit/screen/home/home_controller.dart';
+import 'package:orbit/screen/home/home_state.dart';
+import 'package:orbit/models/device.dart';
 
 import '../auth/auth_service.dart';
 
@@ -20,46 +21,33 @@ class _HomeScreenState extends State<HomeScreen> {
   final HomeController _controller = HomeController();
   final AuthService _authService = AuthService();
 
-  StreamSubscription<List<Device>>? _devicesSubscription;
+  StreamSubscription<HomeState>? _stateSubscription;
 
-  List<Device> _devices = [];
-  Device? _selectedDevice;
+  HomeState _state = const HomeState();
 
   @override
   void initState() {
     super.initState();
 
-    _initializeDevices();
-  }
-
-  Future<void> _initializeDevices() async {
-    final userId = _authService.currentUserId;
-
-    if (userId == null) {
-      return;
-    }
-
-    _devicesSubscription = _controller.devicesStream.listen((devices) {
+    _stateSubscription = _controller.stateStream.listen((state) {
       if (!mounted) {
         return;
       }
 
       setState(() {
-        _devices = devices;
-
-        if (_selectedDevice == null && devices.isNotEmpty) {
-          _selectedDevice = devices.first;
-        }
-
-        final selectedStillExists = devices.any(
-          (device) => device.id == _selectedDevice,
-        );
-
-        if (!selectedStillExists) {
-          _selectedDevice = devices.isNotEmpty ? devices.first : null;
-        }
+        _state = state;
       });
     });
+
+    _initialize();
+  }
+
+  Future<void> _initialize() async {
+    final userId = _authService.currentUserId;
+
+    if (userId == null) {
+      return;
+    }
 
     _controller.watchDevices(userId);
 
@@ -67,14 +55,12 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   void _selectDevice(Device device) {
-    setState(() {
-      _selectedDevice = device;
-    });
+    _controller.selectDevice(device);
   }
 
   @override
   void dispose() {
-    _devicesSubscription?.cancel();
+    _stateSubscription?.cancel();
     _controller.dispose();
 
     super.dispose();
@@ -92,13 +78,18 @@ class _HomeScreenState extends State<HomeScreen> {
               child: Row(
                 children: [
                   HomeSidebar(
-                    devices: _devices,
-                    selectedDeviceId: _selectedDevice?.id,
+                    devices: _state.devices,
+                    selectedDeviceId: _state.selectedDevice?.id,
                     onDeviceSelected: _selectDevice,
                   ),
                   Expanded(
                     child: HomeWorkspace(
-                      selectedDeviceName: _selectedDevice?.deviceName,
+                      selectedDeviceName: _state.selectedDevice?.deviceName,
+                      files: _state.stagedFiles,
+                      onRemoveFile: _controller.removeStagedFile,
+                      onPickFiles: _controller.pickFiles,
+                      onSendFiles: _controller.sendStagedFiles,
+                      clipboardService: _controller.clipboardService,
                     ),
                   ),
                 ],

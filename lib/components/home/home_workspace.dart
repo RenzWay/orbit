@@ -2,10 +2,26 @@ import 'package:flutter/material.dart';
 import 'package:orbit/components/home/device_title.dart';
 import 'package:orbit/components/home/home_actions.dart';
 import 'package:orbit/components/home/transfer_panel.dart';
+import 'package:orbit/models/staged_file.dart';
+import 'package:orbit/service/clipboard/clipboard_service.dart';
 
 class HomeWorkspace extends StatelessWidget {
   final String? selectedDeviceName;
-  const HomeWorkspace({super.key, required this.selectedDeviceName});
+  final List<StagedFile> files;
+  final ValueChanged<StagedFile> onRemoveFile;
+  final VoidCallback onPickFiles;
+  final Future<void> Function() onSendFiles;
+  final ClipboardService clipboardService;
+
+  const HomeWorkspace({
+    super.key,
+    required this.selectedDeviceName,
+    required this.onSendFiles,
+    required this.files,
+    required this.onRemoveFile,
+    required this.onPickFiles,
+    required this.clipboardService,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -14,13 +30,21 @@ class HomeWorkspace extends StatelessWidget {
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-           DeviceTitle(
-            deviceName: selectedDeviceName,
-          ),
+          DeviceTitle(deviceName: selectedDeviceName),
           const SizedBox(height: 16),
-          const Expanded(child: TransferPanel()),
+          Expanded(
+            child: TransferPanel(
+              files: files,
+              onRemoveFile: onRemoveFile,
+              onPickFiles: onPickFiles,
+            ),
+          ),
           const SizedBox(height: 12),
-          const HomeActions(),
+          HomeActions(
+            onSendFiles: onSendFiles,
+            onPickFiles: onPickFiles,
+            clipboardService: clipboardService,
+          ),
         ],
       ),
     );
