@@ -15,23 +15,19 @@ class OrbitApp extends StatefulWidget {
 
 class _OrbitAppState extends State<OrbitApp> {
   final AuthController _authController = AuthController();
+  final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
   StreamSubscription<bool>? _loginSubcription;
 
   @override
   void initState() {
     super.initState();
-
     _initializeAuth();
   }
 
   Future<void> _initializeAuth() async {
     await _authController.initialize(
       onLoginSuccess: () {
-        if (!mounted) {
-          return;
-        }
-
-        Navigator.of(context).pushReplacementNamed('/home');
+        _navigatorKey.currentState?.pushReplacementNamed('/home');
       },
     );
   }
@@ -40,22 +36,19 @@ class _OrbitAppState extends State<OrbitApp> {
   void dispose() {
     _loginSubcription?.cancel();
     _authController.dispose();
-
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
+      navigatorKey: _navigatorKey, // <-- tambahin ini
       title: 'Orbit',
       debugShowCheckedModeBanner: false,
-
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
-
       initialRoute: '/login',
-
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
