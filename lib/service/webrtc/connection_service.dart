@@ -80,6 +80,56 @@ class ConnectionService {
         });
   }
 
+  Stream<ConnectionSession> watchIncomingSessions({
+  required String userId,
+  required String localDeviceId,
+}) {
+  return _signalingService
+      .watchConnections(userId)
+      .map((event) {
+        final value = event.snapshot.value;
+
+        if (value == null || value is! Map) {
+          return <ConnectionSession>[];
+        }
+
+        final sessions = <ConnectionSession>[];
+
+        for (final entry in value.entries) {
+          final connectionId = entry.key.toString();
+          final data = entry.value;
+
+          if (data is! Map) {
+            continue;
+          }
+
+          final remoteDeviceId =
+              data['remoteDeviceId']?.toString();
+
+          final callerDeviceId =
+              data['callerDeviceId']?.toString();
+
+          if (remoteDeviceId != localDeviceId ||
+              callerDeviceId == null) {
+            continue;
+          }
+
+          sessions.add(
+            ConnectionSession(
+              connectionId: connectionId,
+              localDeviceId: localDeviceId,
+              remoteDeviceId: callerDeviceId,
+              userId: userId,
+              role: ConnectionRole.callee,
+            ),
+          );
+        }
+
+        return sessions;
+      })
+      .expand((sessions) => sessions);
+}
+
   Future<void> sendCallerCandidate({
     required ConnectionSession session,
     required IceCandidate candidate,
@@ -112,6 +162,8 @@ class ConnectionService {
     await _signalingService.createConnection(
       userId: userId,
       connectionId: connectionId,
+      callerDeviceId: localDeviceId,
+      remoteDeviceId: remoteDeviceId,
     );
 
     return ConnectionSession(

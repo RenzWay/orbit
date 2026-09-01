@@ -16,11 +16,14 @@ class SignalingService {
   Future<void> createConnection({
     required String userId,
     required String connectionId,
+    required String callerDeviceId,
+    required String remoteDeviceId,
   }) async {
-    await _connectionReference(
-      userId: userId,
-      connectionId: connectionId,
-    ).set({'createAt': ServerValue.timestamp});
+    await _connectionReference(userId: userId, connectionId: connectionId).set({
+      'createAt': ServerValue.timestamp,
+      'callerDeviceId': callerDeviceId,
+      'remoteDeviceId': remoteDeviceId,
+    });
   }
 
   Future<void> sendOffer({
@@ -115,5 +118,9 @@ class SignalingService {
       userId: userId,
       connectionId: connectionId,
     ).child('calleeCandidates').onChildAdded;
+  }
+
+  Stream<DatabaseEvent> watchConnections(String userId) {
+    return _database.ref('signaling/$userId').onValue;
   }
 }

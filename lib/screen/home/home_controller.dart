@@ -9,22 +9,31 @@ import 'package:orbit/service/device/device_service.dart';
 import 'package:orbit/service/transfer/file_metadata.dart';
 import 'package:orbit/service/transfer/file_transfer_service.dart';
 import 'package:orbit/service/transfer/transfer_id.dart';
+import 'package:orbit/service/webrtc/webrtc_connection_state.dart';
 import 'package:orbit/service/webrtc/webrtc_service.dart';
 import 'package:orbit/service/clipboard/clipboard_service.dart';
+import 'package:orbit/service/webrtc/connection_service.dart';
+import 'package:orbit/service/webrtc/connection_session.dart';
 
 class HomeController {
   final DeviceService _deviceService;
   final WebrtcService _webrtcService;
   late final ClipboardService _clipboardService;
   late final FileTransferService _fileTransferService;
+  final ConnectionService _connectionService;
 
-  HomeController({DeviceService? deviceService, WebrtcService? webrtcService})
-    : _deviceService = deviceService ?? DeviceService(),
-      _webrtcService = webrtcService ?? WebrtcService(),
-      _clipboardService = ClipboardService(
-        webRtcService: webrtcService ?? WebrtcService(),
-        router: (webrtcService ?? WebrtcService()).router,
-      ) {
+  StreamSubscription<ConnectionSession>? _incomingConnectionSubscription;
+  StreamSubscription<WebrtcConnectionState>? _webrtcStateSubscription;
+
+  ConnectionSession? _currentSession;
+
+  HomeController({
+    DeviceService? deviceService,
+    WebrtcService? webrtcService,
+    ConnectionService? connectionService,
+  }) : _deviceService = deviceService ?? DeviceService(),
+       _webrtcService = webrtcService ?? WebrtcService(),
+       _connectionService = connectionService ?? ConnectionService() {
     _fileTransferService = FileTransferService(webRtcService: _webrtcService);
 
     _fileTransferService.initialize();
@@ -48,8 +57,7 @@ class HomeController {
 
   HomeState get state => _state;
 
-  ClipboardService get clipboardService =>
-    _clipboardService;
+  ClipboardService get clipboardService => _clipboardService;
 
   Future<void> registerCurrentDevice(String userId) async {
     await _deviceService.setOnline(userId: userId);
@@ -103,6 +111,47 @@ class HomeController {
     _updateState(
       _state.copyWith(stagedFiles: [..._state.stagedFiles, ...newFiles]),
     );
+  }
+
+  Future<void> connectToDevice({
+    required String userId,
+    required Device device,
+  }) async {
+    final localDeviceId = await _deviceService.getDeviceId();
+
+    await _webrtcService.close(session: _currentSession);
+
+    _currentSession = await _connectionService.createCallerSession(
+      userId: userId,
+      localDeviceId: localDeviceId,
+      remoteDeviceId: device.id,
+    );
+
+    _webrtcStateSubscription?.cancel();
+
+    _webrtcStateSubscription = _webrtcService.stateStream.listen((state) {
+      _updateState(_state.copyWith(connectionState: state));
+    });
+
+    await _webrtcService.startCaller(_currentSession!);
+  }
+
+  Future<void> watchIncomingConnections(String userId) async {
+    final localDeviceId = await _deviceService.getDeviceId();
+
+    _incomingConnectionSubscription?.cancel();
+
+    _incomingConnectionSubscription = _connectionService
+        .watchIncomingSessions(userId: userId, localDeviceId: localDeviceId)
+        .listen((session) async {
+          if (_currentSession != null) {
+            return;
+          }
+
+          _currentSession = session;
+
+          await _webrtcService.startCallee(session);
+        });
   }
 
   Future<void> sendStagedFiles() async {
@@ -165,7 +214,11 @@ class HomeController {
 
   Future<void> dispose() async {
     await _deviceSubscription?.cancel();
+    await _incomingConnectionSubscription?.cancel();
+    await _webrtcStateSubscription?.cancel();
+
     await _clipboardService.dispose();
+    await _webrtcService.close();
     await _stateController.close();
   }
 }

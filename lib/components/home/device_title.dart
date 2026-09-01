@@ -1,9 +1,36 @@
 import 'package:flutter/material.dart';
+import 'package:orbit/service/webrtc/webrtc_connection_state.dart';
 
 class DeviceTitle extends StatelessWidget {
   final String? deviceName;
+  final WebrtcConnectionState connectionState;
 
-  const DeviceTitle({super.key, this.deviceName});
+  const DeviceTitle({
+    super.key,
+    this.deviceName,
+    required this.connectionState,
+  });
+
+  String _connectionText() {
+    switch (connectionState) {
+      case WebrtcConnectionState.idle:
+        return 'Not Connected';
+      case WebrtcConnectionState.connecting:
+        return 'Connecting...';
+
+      case WebrtcConnectionState.connected:
+        return 'Connected';
+
+      case WebrtcConnectionState.disconnected:
+        return 'Disconnected';
+
+      case WebrtcConnectionState.failed:
+        return 'Connection failed';
+
+      case WebrtcConnectionState.closed:
+        return 'Connection closed';
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -27,6 +54,7 @@ class DeviceTitle extends StatelessWidget {
               : 'Select file or drop file to send to this device',
           style: theme.textTheme.bodySmall,
         ),
+        Text(_connectionText(), style: Theme.of(context).textTheme.bodySmall),
       ],
     );
   }

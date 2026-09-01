@@ -51,11 +51,20 @@ class _HomeScreenState extends State<HomeScreen> {
 
     _controller.watchDevices(userId);
 
+    await _controller.watchIncomingConnections(userId);
     await _controller.registerCurrentDevice(userId);
   }
 
-  void _selectDevice(Device device) {
+  Future<void> _selectDevice(Device device) async {
     _controller.selectDevice(device);
+
+    final userId = _authService.currentUserId;
+
+    if (userId == null) {
+      return;
+    }
+
+    await _controller.connectToDevice(userId: userId, device: device);
   }
 
   @override
@@ -85,6 +94,7 @@ class _HomeScreenState extends State<HomeScreen> {
                   Expanded(
                     child: HomeWorkspace(
                       selectedDeviceName: _state.selectedDevice?.deviceName,
+                      connectionState: _state.connectionState,
                       files: _state.stagedFiles,
                       onRemoveFile: _controller.removeStagedFile,
                       onPickFiles: _controller.pickFiles,

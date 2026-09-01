@@ -5,7 +5,7 @@ import 'package:orbit/models/device.dart';
 class HomeSidebar extends StatelessWidget {
   final List<Device> devices;
   final String? selectedDeviceId;
-  final ValueChanged<Device> onDeviceSelected;
+  final Future<void> Function(Device) onDeviceSelected;
 
   const HomeSidebar({
     super.key,
