@@ -2,7 +2,6 @@ import 'dart:async';
 
 import 'package:clipboard/clipboard.dart';
 import 'package:flutter/material.dart';
-import 'package:flutter/widgets.dart';
 import 'package:orbit/service/clipboard/clipboard_service.dart';
 
 class ClipboardDialog extends StatefulWidget {

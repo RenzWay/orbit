@@ -13,40 +13,39 @@ class AuthController {
 
   AuthService get authService => _authService;
 
-Future<void> initialize({
-  required void Function() onLoginSuccess,
-}) async {
-  await _authService.restoreSession();
+  Future<void> initialize({required void Function() onLoginSuccess}) async {
+    await _authService.restoreSession();
 
-  _deepLinkService.listen((idToken) async {
-    await _authService.signInWithGoogleIdToken(
-      idToken,
-    );
+    if (_authService.isSignedIn) {
+      onLoginSuccess();
+      return;
+    }
+
+    _deepLinkService.listen((idToken) async {
+      await _authService.signInWithGoogleIdToken(idToken);
+
+      onLoginSuccess();
+    });
+
+    final initialUri = await _deepLinkService.getInitialLink();
+
+    if (initialUri == null) {
+      return;
+    }
+
+    final idToken = initialUri.queryParameters['idToken'];
+
+    if (initialUri.scheme != 'orbit' ||
+        initialUri.host != 'auth-callback' ||
+        idToken == null ||
+        idToken.isEmpty) {
+      return;
+    }
+
+    await _authService.signInWithGoogleIdToken(idToken);
 
     onLoginSuccess();
-  });
-
-  final initialUri = await _deepLinkService.getInitialLink();
-
-  if (initialUri == null) {
-    return;
   }
-
-  final idToken = initialUri.queryParameters['idToken'];
-
-  if (initialUri.scheme != 'orbit' ||
-      initialUri.host != 'auth-callback' ||
-      idToken == null ||
-      idToken.isEmpty) {
-    return;
-  }
-
-  await _authService.signInWithGoogleIdToken(
-    idToken,
-  );
-
-  onLoginSuccess();
-}
 
   Future<void> dispose() async {
     await _deepLinkService.dispose();
