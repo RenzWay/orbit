@@ -1,6 +1,6 @@
 import 'dart:async';
 
-import 'package:clipboard/clipboard.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter/material.dart';
 import 'package:orbit/service/clipboard/clipboard_service.dart';
 
@@ -42,7 +42,8 @@ class _ClipboardDialogState extends State<ClipboardDialog> {
 
   Future<void> _loadClipboard() async {
     try {
-      final text = await FlutterClipboard.paste();
+      final clipboardData = await Clipboard.getData(Clipboard.kTextPlain);
+      final text = clipboardData?.text ?? '';
 
       if (!mounted) {
         return;

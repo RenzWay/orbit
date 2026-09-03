@@ -1,9 +1,49 @@
 import 'package:flutter/material.dart';
-
 import 'package:url_launcher/url_launcher.dart';
 
-class LoginScreen extends StatelessWidget {
+class LoginScreen extends StatefulWidget {
   const LoginScreen({super.key});
+
+  @override
+  State<LoginScreen> createState() => _LoginScreenState();
+}
+
+class _LoginScreenState extends State<LoginScreen> {
+  bool _isLoading = false;
+
+  void _handleLogin() async {
+    setState(() {
+      _isLoading = true;
+    });
+
+    try {
+      final uri = Uri.parse(
+        'https://letter-26c71.firebaseapp.com/auth.html',
+      );
+
+      final launched = await launchUrl(
+        uri,
+        mode: LaunchMode.externalApplication,
+      );
+
+      if (!launched) {
+        throw 'Could not launch login page';
+      }
+      
+      // We don't set _isLoading = false here because we expect the app 
+      // to navigate to the home screen once the deep link is received.
+      // If the user manually comes back without logging in, they can try again.
+    } catch (e) {
+      if (mounted) {
+        setState(() {
+          _isLoading = false;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(content: Text('Error: $e')),
+        );
+      }
+    }
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -31,16 +71,8 @@ class LoginScreen extends StatelessWidget {
                   Expanded(
                     flex: 5,
                     child: _LoginContent(
-                      onLogin: () async {
-                        final uri = Uri.parse(
-                          'https://letter-26c71.firebaseapp.com/auth.html',
-                        );
-
-                        await launchUrl(
-                          uri,
-                          mode: LaunchMode.externalApplication,
-                        );
-                      },
+                      isLoading: _isLoading,
+                      onLogin: _handleLogin,
                     ),
                   ),
                   Expanded(
@@ -61,9 +93,13 @@ class LoginScreen extends StatelessWidget {
 }
 
 class _LoginContent extends StatelessWidget {
+  final bool isLoading;
   final VoidCallback onLogin;
 
-  const _LoginContent({required this.onLogin});
+  const _LoginContent({
+    required this.isLoading,
+    required this.onLogin,
+  });
 
   @override
   Widget build(BuildContext context) {
@@ -76,53 +112,52 @@ class _LoginContent extends StatelessWidget {
             'assets/ic_orbit.png',
             height: 30,
             width: 30,
-            colorBlendMode: BlendMode.clear,
           ),
-          // Icon(
-          //   Icons.all_inclusive,
-          //   size: 34,
-          //   color: Theme.of(context).colorScheme.primary,
-          // ),
-
           const SizedBox(height: 14),
           Text(
             'Welcome To Orbit',
             style: Theme.of(context).textTheme.titleMedium
                 ?.copyWith(fontWeight: FontWeight.bold),
           ),
-
           const SizedBox(height: 2),
           Text(
             'Please login first to use Orbit',
             style: Theme.of(context).textTheme.bodySmall,
           ),
-
           const SizedBox(height: 20),
           SizedBox(
             width: 220,
             height: 38,
             child: FilledButton(
-              onPressed: onLogin,
-              child: Row(
-                mainAxisAlignment: MainAxisAlignment.center,
-                children: [
-                  Container(
-                    width: 20,
-                    height: 20,
-                    alignment: Alignment.center,
-                    decoration: BoxDecoration(
-                      color: Colors.white,
-                      borderRadius: BorderRadius.circular(4),
+              onPressed: isLoading ? null : onLogin,
+              child: isLoading
+                  ? const SizedBox(
+                      width: 20,
+                      height: 20,
+                      child: CircularProgressIndicator(
+                        strokeWidth: 2,
+                        color: Colors.white,
+                      ),
+                    )
+                  : Row(
+                      mainAxisAlignment: MainAxisAlignment.center,
+                      children: [
+                        Container(
+                          width: 20,
+                          height: 20,
+                          alignment: Alignment.center,
+                          decoration: BoxDecoration(
+                            color: Colors.white,
+                            borderRadius: BorderRadius.circular(4),
+                          ),
+                          child: Image.asset(
+                            'assets/ic_google.png',
+                          ),
+                        ),
+                        const SizedBox(width: 8),
+                        const Text('Login with Google'),
+                      ],
                     ),
-                    child: Image.asset(
-                      'assets/ic_google.png',
-                      colorBlendMode: BlendMode.srcIn,
-                    ),
-                  ),
-                  const SizedBox(width: 8),
-                  const Text('Login with Google'),
-                ],
-              ),
             ),
           ),
         ],

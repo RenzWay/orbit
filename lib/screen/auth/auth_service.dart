@@ -20,6 +20,12 @@ class AuthService {
 
   static const String _displayNameKey = 'firebase_display_name';
 
+  static const String _photoUrlKey = 'firebase_photo_url';
+
+  String? _photoUrl;
+
+  String? get currentUserPhotoUrl => _photoUrl;
+
   final SharedPreferencesAsync _preferences;
 
   AuthService({SharedPreferencesAsync? preferences})
@@ -47,6 +53,8 @@ class AuthService {
     _localId = await _preferences.getString(_localIdKey);
 
     _displayName = await _preferences.getString(_displayNameKey);
+
+    _photoUrl = await _preferences.getString(_photoUrlKey);
 
     if (_refreshToken == null || _localId == null) {
       _clearSessionMemory();
@@ -81,7 +89,7 @@ class AuthService {
     }
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
-
+    print("FULL DATA FROM FIREBASE: $data");
     final newIdToken = data['id_token'] as String?;
 
     final newRefreshToken = data['refresh_token'] as String?;
@@ -131,10 +139,33 @@ class AuthService {
 
     final data = jsonDecode(response.body) as Map<String, dynamic>;
 
-    _idToken = data['idToken'] as String?;
-    _refreshToken = data['refreshToken'] as String?;
-    _localId = data['localId'] as String?;
-    _displayName = data['displayName'] as String?;
+    _idToken = data['id_token'] ?? data['idToken'];
+    _refreshToken = data['refresh_token'] ?? data['refreshToken'];
+    _localId = data['user_id'] ?? data['localId'];
+    _displayName = data['displayName'] ?? data['fullName'];
+    _photoUrl = data['photoUrl'];
+
+    if (_displayName == null && data['email'] != null) {
+      _displayName = (data['email'] as String).split('@')[0];
+    }
+
+    if (_idToken != null) {
+      try {
+        final parts = _idToken!.split('.');
+        if (parts.length == 3) {
+          // Decode bagian tengah JWT (payload)
+          final payload = utf8.decode(
+            base64.decode(base64.normalize(parts[1])),
+          );
+          final decoded = jsonDecode(payload);
+
+          _displayName = decoded['name'];
+          _photoUrl = decoded['picture']; // Link foto profil asli Google
+        }
+      } catch (e) {
+        print("Gagal bongkar JWT: $e");
+      }
+    }
 
     if (_idToken == null || _refreshToken == null || _localId == null) {
       throw StateError('Firebase authentication response is incomplete.');
@@ -149,18 +180,21 @@ class AuthService {
     if (_displayName != null) {
       await _preferences.setString(_displayNameKey, _displayName!);
     }
+
+    if (_photoUrl != null) {
+      await _preferences.setString(_photoUrlKey, _photoUrl!);
+    }
   }
 
   Future<void> signOut() async {
+    print("SIGN OUT CALLED");
     _clearSessionMemory();
 
     await _preferences.remove(_idTokenKey);
-
     await _preferences.remove(_refreshTokenKey);
-
     await _preferences.remove(_localIdKey);
-
     await _preferences.remove(_displayNameKey);
+    await _preferences.remove(_photoUrlKey);
   }
 
   void _clearSessionMemory() {
@@ -168,5 +202,6 @@ class AuthService {
     _refreshToken = null;
     _localId = null;
     _displayName = null;
+    _photoUrl = null;
   }
 }
