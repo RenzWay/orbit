@@ -4,9 +4,10 @@ import 'package:flutter/material.dart';
 import 'package:orbit/components/home/home_header.dart';
 import 'package:orbit/components/home/home_sidebar.dart';
 import 'package:orbit/components/home/home_workspace.dart';
+import 'package:orbit/models/device.dart';
+import 'package:orbit/screen/auth/auth_controller.dart';
 import 'package:orbit/screen/home/home_controller.dart';
 import 'package:orbit/screen/home/home_state.dart';
-import 'package:orbit/models/device.dart';
 
 import '../auth/auth_service.dart';
 
@@ -18,6 +19,7 @@ class HomeScreen extends StatefulWidget {
 }
 
 class _HomeScreenState extends State<HomeScreen> {
+  final AuthController _authController = AuthController();
   final HomeController _controller = HomeController();
   final AuthService _authService = AuthService();
 
@@ -43,6 +45,8 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 
   Future<void> _initialize() async {
+    await _authService.restoreSession();
+
     final userId = _authService.currentUserId;
 
     if (userId == null) {
@@ -82,7 +86,7 @@ class _HomeScreenState extends State<HomeScreen> {
       body: SafeArea(
         child: Column(
           children: [
-            HomeHeader(),
+            HomeHeader(authController: _authController),
             Expanded(
               child: Row(
                 children: [

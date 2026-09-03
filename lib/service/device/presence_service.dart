@@ -1,23 +1,19 @@
-import 'package:firebase_database/firebase_database.dart';
+import 'package:orbit/screen/auth/auth_service.dart';
+import 'package:orbit/service/firebase/rest_realtime_database_service.dart';
 
 class PresenceService {
-  final FirebaseDatabase _database;
+  final RestRealtimeDatabaseService _database;
 
-  PresenceService({FirebaseDatabase? database})
-    : _database = database ?? FirebaseDatabase.instance;
+  PresenceService({RestRealtimeDatabaseService? database})
+    : _database =
+          database ?? RestRealtimeDatabaseService(authService: AuthService());
 
-  DatabaseReference _deviceReference(String userId, String deviceId) {
-    return _database.ref('presence/$userId/$deviceId');
+  String _devicePath(String userId, String deviceId) {
+    return 'presence/$userId/$deviceId';
   }
 
-  DatabaseReference _connectionReference() {
-    return _database.ref('.info/connected');
-  }
-
-  Stream<bool> connectionState() {
-    return _connectionReference().onValue.map((event) {
-      return event.snapshot.value == true;
-    });
+  String _devicesPath(String userId) {
+    return 'presence/$userId';
   }
 
   Future<void> setOnline({
@@ -25,37 +21,60 @@ class PresenceService {
     required String deviceId,
     required String deviceName,
   }) async {
-    final connection = _connectionReference();
-
-    final connectedEvent = await connection.once();
-
-    if (connectedEvent.snapshot.value != true) {
-      throw StateError('Firebase is not connected.');
-    }
-
-    final deviceReference = _deviceReference(userId, deviceId);
-
-    await deviceReference.onDisconnect().set({
-      'deviceName': deviceName,
-      'status': 'offline',
-      'lastSeen': ServerValue.timestamp,
-    });
-
-    await deviceReference.set({
+    await _database.put(_devicePath(userId, deviceId), {
       'deviceName': deviceName,
       'status': 'online',
-      'lastSeen': ServerValue.timestamp,
+      'lastSeen': DateTime.now().millisecondsSinceEpoch,
     });
   }
 
-  Stream<DatabaseEvent> watchDevices(String userId) {
-    return _database.ref('presence/$userId').onValue;
+  Stream<Map<String, dynamic>> watchDevices(String userId) async* {
+    final devices = <String, dynamic>{};
+
+    await for (final event in _database.stream(_devicesPath(userId))) {
+      final segments = event.path
+          .split('/')
+          .where((segment) => segment.isNotEmpty)
+          .toList();
+
+      if (segments.isEmpty) {
+        devices.clear();
+        final data = event.data;
+        if (data is Map) {
+          devices.addAll(
+            data.map((key, value) => MapEntry(key.toString(), value)),
+          );
+        }
+      } else {
+        final deviceId = segments.first;
+        if (segments.length == 1) {
+          if (event.data == null) {
+            devices.remove(deviceId);
+          } else {
+            devices[deviceId] = event.data;
+          }
+        } else {
+          final existing = devices[deviceId];
+          final merged = existing is Map
+              ? Map<String, dynamic>.from(existing)
+              : <String, dynamic>{};
+          merged[segments[1]] = event.data;
+          devices[deviceId] = merged;
+        }
+      }
+
+      yield Map<String, dynamic>.from(devices);
+    }
   }
 
   Future<void> removeDevice({
     required String userId,
     required String deviceId,
   }) async {
-    await _deviceReference(userId, deviceId).remove();
+    await _database.delete(_devicePath(userId, deviceId));
+  }
+
+  void dispose() {
+    _database.dispose();
   }
 }

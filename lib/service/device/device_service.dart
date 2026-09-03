@@ -1,7 +1,8 @@
 import 'package:orbit/models/device.dart';
 import 'package:orbit/service/device/device_identity_service.dart';
 import 'package:orbit/service/device/device_info_service.dart';
-import 'package:orbit/service/device/presence_service.dart';
+// import 'package:orbit/service/device/presence_service.dart';
+import 'package:orbit/service/firebase/presence_service.dart';
 
 class DeviceService {
   final DeviceIdentityService _identityService;
@@ -42,13 +43,8 @@ class DeviceService {
   }
 
   Stream<List<Device>> watchDevices(String userId) {
-    return _presenceService.watchDevices(userId).map((event) {
+    return _presenceService.watchDevices(userId).map((data) {
       final devices = <Device>[];
-      final data = event.snapshot.value;
-
-      if (data is! Map) {
-        return devices;
-      }
 
       for (final entry in data.entries) {
         final deviceId = entry.key.toString();
@@ -62,7 +58,7 @@ class DeviceService {
           Device(
             id: deviceId,
             deviceName:
-                deviceData['deviceName']?.toString() ?? 'Unknown Device',
+            deviceData['deviceName']?.toString() ?? 'Unknown Device',
             status: deviceData['status'] == 'online'
                 ? DeviceStatus.online
                 : DeviceStatus.offline,

@@ -27,7 +27,9 @@ class RestRealtimeDatabaseService {
     : _authService = authService ?? AuthService(),
       _client = client ?? http.Client();
 
-  Uri _uri(String path) {
+  Future _uri(String path) async {
+    await _authService.restoreSession();
+
     final token = _authService.idToken;
 
     if (token == null || token.isEmpty) {
@@ -41,7 +43,7 @@ class RestRealtimeDatabaseService {
   }
 
   Future<dynamic> get(String path) async {
-    final response = await _client.get(_uri(path));
+    final response = await _client.get(await _uri(path));
 
     if (response.statusCode != 200) {
       throw StateError(
@@ -55,7 +57,7 @@ class RestRealtimeDatabaseService {
 
   Future<void> put(String path, dynamic data) async {
     final response = await _client.put(
-      _uri(path),
+      await _uri(path),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(data),
     );
@@ -70,7 +72,7 @@ class RestRealtimeDatabaseService {
 
   Future<void> patch(String path, Map<String, dynamic> data) async {
     final response = await _client.patch(
-      _uri(path),
+      await _uri(path),
       headers: {'Content-Type': 'application/json'},
       body: jsonEncode(data),
     );
@@ -84,7 +86,7 @@ class RestRealtimeDatabaseService {
   }
 
   Future<void> delete(String path) async {
-    final response = await _client.delete(_uri(path));
+    final response = await _client.delete(await _uri(path));
 
     if (response.statusCode < 200 || response.statusCode >= 300) {
       throw StateError(
@@ -96,7 +98,7 @@ class RestRealtimeDatabaseService {
 
   Stream<RestDatabaseEvent> stream(String path) async* {
     final response = await _client.send(
-      http.Request('GET', _uri(path))..headers['Accept'] = 'text/event-stream',
+      http.Request('GET', await _uri(path))..headers['Accept'] = 'text/event-stream',
     );
 
     if (response.statusCode != 200) {

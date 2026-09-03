@@ -1,12 +1,13 @@
 import 'package:flutter/material.dart';
-
-import '../../screen/auth/auth_service.dart';
+import 'package:orbit/screen/auth/auth_controller.dart';
 
 class HomeHeader extends StatefulWidget {
-  const HomeHeader({super.key});
+  final AuthController authController;
+
+  const HomeHeader({super.key, required this.authController});
 
   @override
-  State<StatefulWidget> createState() => _HomeHeaderState();
+  State<HomeHeader> createState() => _HomeHeaderState();
 }
 
 class _HomeHeaderState extends State<HomeHeader> {
@@ -20,7 +21,7 @@ class _HomeHeaderState extends State<HomeHeader> {
   }
 
   Future<void> _loadUserData() async {
-    final authService = AuthService();
+    final authService = widget.authController.authService;
     await authService.restoreSession();
 
     print("USER NAME: ${authService.currentUserName}");
@@ -35,12 +36,15 @@ class _HomeHeaderState extends State<HomeHeader> {
   }
 
   void _handleLogout(BuildContext context) async {
-    final authService = AuthService();
-    await authService.signOut();
-
-    if (context.mounted) {
-      Navigator.of(context).pushNamedAndRemoveUntil('/login', (route) => false);
+    void handle(BuildContext context) async {
+      await widget.authController.authService.signOut();
+      if (context.mounted) {
+        Navigator.of(context)
+            .pushNamedAndRemoveUntil('/login', (route) => false);
+      }
     }
+
+    return handle(context);
   }
 
   @override

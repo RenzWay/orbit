@@ -16,7 +16,9 @@ class OrbitApp extends StatefulWidget {
 class _OrbitAppState extends State<OrbitApp> {
   final AuthController _authController = AuthController();
   final GlobalKey<NavigatorState> _navigatorKey = GlobalKey<NavigatorState>();
-  StreamSubscription<bool>? _loginSubcription;
+  StreamSubscription<bool>? _loginSubscription;
+
+  bool _isInitializing = true;
 
   @override
   void initState() {
@@ -30,11 +32,23 @@ class _OrbitAppState extends State<OrbitApp> {
         _navigatorKey.currentState?.pushReplacementNamed('/home');
       },
     );
+
+    if (mounted) {
+      setState(() {
+        _isInitializing = false;
+      });
+
+      if (_authController.authService.isSignedIn) {
+        Future.microtask(() {
+          _navigatorKey.currentState?.pushReplacementNamed('/home');
+        });
+      }
+    }
   }
 
   @override
   void dispose() {
-    _loginSubcription?.cancel();
+    _loginSubscription?.cancel();
     _authController.dispose();
     super.dispose();
   }
@@ -42,13 +56,24 @@ class _OrbitAppState extends State<OrbitApp> {
   @override
   Widget build(BuildContext context) {
     return MaterialApp(
-      navigatorKey: _navigatorKey, // <-- tambahin ini
+      navigatorKey: _navigatorKey,
+      // <-- tambahin ini
       title: 'Orbit',
       debugShowCheckedModeBanner: false,
       theme: AppTheme.light(),
       darkTheme: AppTheme.dark(),
       themeMode: ThemeMode.dark,
-      initialRoute: '/login',
+      home: _isInitializing
+          ? const Scaffold(
+              backgroundColor: Color(0xFF0E1117),
+              body: Center(child: CircularProgressIndicator()),
+            )
+          : (_authController.authService.isSignedIn
+                ? const HomeScreen()
+                : const LoginScreen()),
+      // initialRoute: _isInitializing
+      //     ? null
+      //     : (_authController.authService.isSignedIn ? '/home' : '/login'),
       routes: {
         '/login': (context) => const LoginScreen(),
         '/home': (context) => const HomeScreen(),
