@@ -53,4 +53,48 @@
     <string name="accept_progress">Menerima…</string>
     <string name="theme_title">Tema</string>
     <string name="logout_desc">Keluar dari akun</string>
+
+    <!-- Notifikasi -->
+    <string name="notif_channel_service_name">Orbit — Layanan Latar Belakang</string>
+    <string name="notif_channel_service_desc">Menjaga Orbit tetap terhubung dengan perangkat lain</string>
+    <string name="notif_channel_status_name">Status Perangkat</string>
+    <string name="notif_channel_status_desc">Peringatan saat perangkat online/offline</string>
+    <string name="notif_channel_progress_name">Progres Transfer</string>
+    <string name="notif_channel_progress_desc">Menampilkan status transfer file</string>
+    <string name="notif_channel_result_name">Hasil Transfer</string>
+    <string name="notif_channel_result_desc">Peringatan saat transfer file selesai</string>
+    <string name="notif_orbit_active">Orbit aktif</string>
+    <string name="notif_service_ready">Siap menerima file dan clipboard</string>
+    <string name="notif_service_connected">Terhubung ke %1$s</string>
+    <string name="notif_device_online">%1$s sekarang online</string>
+    <string name="notif_ready_transfer">Siap untuk transfer file</string>
+    <string name="notif_sending_file">Mengirim %1$s</string>
+    <string name="notif_receiving_file">Menerima %1$s</string>
+    <string name="notif_transfer_success">\'%1$s\' berhasil %2$s</string>
+    <string name="notif_transfer_failed">Gagal %1$s \'%2$s\'</string>
+    <string name="notif_sent">terkirim</string>
+    <string name="notif_received">diterima</string>
+    <string name="notif_send">mengirim</string>
+    <string name="notif_receive">menerima</string>
+    <string name="notif_generic_error">Terjadi kesalahan. Silakan coba lagi.</string>
+
+    <!-- Pesan Transfer -->
+    <string name="msg_connecting_to">Menyambungkan ke %1$s…</string>
+    <string name="msg_connect_failed">Gagal menyambung ke %1$s</string>
+    <string name="msg_clipboard_sent">Clipboard terkirim!</string>
+    <string name="msg_clipboard_failed">Gagal mengirim clipboard</string>
+    <string name="label_file">file</string>
+    <string name="label_files">file</string>
+
+    <!-- Toasts dan Dialog -->
+    <string name="msg_clipboard_synced">Clipboard tersinkron dari PC</string>
+    <string name="msg_download_prepared_failed">Gagal menyiapkan download: %1$s</string>
+    <string name="msg_login_success">Login Berhasil!</string>
+    <string name="msg_login_failed">Login gagal: %1$s</string>
+    <string name="title_upload_to_device">Upload ke perangkat?</string>
+    <string name="msg_no_online_devices">Tidak ada perangkat yang online sekarang. Buka Orbit di perangkat tujuan dulu.</string>
+    <string name="btn_cancel">Batal</string>
+
+    <string name="btn_cancel_transfer">Batal</string>
+    <string name="msg_transfer_cancelled">Transfer dibatalkan</string>
 </resources>

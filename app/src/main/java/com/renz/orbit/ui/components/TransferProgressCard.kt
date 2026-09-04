@@ -11,6 +11,10 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material.icons.Icons
+import androidx.compose.material.icons.filled.Close
+import androidx.compose.material3.Icon
+import androidx.compose.material3.IconButton
 import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Surface
@@ -31,6 +35,7 @@ fun TransferProgressCard(
     fileName: String,
     progress: Float,
     isSending: Boolean,
+    onCancel: () -> Unit = {},
     modifier: Modifier = Modifier
 ) {
     val animatedProgress by animateFloatAsState(
@@ -90,6 +95,13 @@ fun TransferProgressCard(
                 color = barColor,
                 trackColor = barColor.copy(alpha = 0.1f)
             )
+
+            IconButton(onClick = onCancel) {
+                Icon(
+                    Icons.Default.Close,
+                    contentDescription = stringResource(R.string.btn_cancel_transfer)
+                )
+            }
         }
     }
 }

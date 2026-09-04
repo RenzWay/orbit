@@ -7,7 +7,7 @@
 
     <!-- Clipboard -->
     <string name="title_sync_clipboard">Sync Clipboard</string>
-    <string name="hint_clipboard">Type or paste text...</string>
+    <string name="hint_clipboard">Type or paste text…</string>
     <string name="btn_send_to_pc">Send Clipboard to PC</string>
 
     <!-- Device Status -->
@@ -48,8 +48,52 @@
     <string name="change_language">Change Language</string>
     <string name="choose_language">Choose language</string>
     <string name="language">Language</string>
-    <string name="sending_progress">Sending...</string>
-    <string name="accept_progress">Accept...</string>
+    <string name="sending_progress">Sending…</string>
+    <string name="accept_progress">Accept…</string>
     <string name="theme_title">Theme</string>
     <string name="logout_desc">Log out from your account</string>
+
+    <!-- Notifications -->
+    <string name="notif_channel_service_name">Orbit — Background Service</string>
+    <string name="notif_channel_service_desc">Keeps Orbit connected to other devices</string>
+    <string name="notif_channel_status_name">Device Status</string>
+    <string name="notif_channel_status_desc">Alerts when devices come online/offline</string>
+    <string name="notif_channel_progress_name">Transfer Progress</string>
+    <string name="notif_channel_progress_desc">Shows file transfer status</string>
+    <string name="notif_channel_result_name">Transfer Result</string>
+    <string name="notif_channel_result_desc">Alerts when file transfer is complete</string>
+    <string name="notif_orbit_active">Orbit is active</string>
+    <string name="notif_service_ready">Ready to receive files and clipboard</string>
+    <string name="notif_service_connected">Connected to %1$s</string>
+    <string name="notif_device_online">%1$s is now online</string>
+    <string name="notif_ready_transfer">Ready for file transfer</string>
+    <string name="notif_sending_file">Sending %1$s</string>
+    <string name="notif_receiving_file">Receiving %1$s</string>
+    <string name="notif_transfer_success">\'%1$s\' %2$s successfully</string>
+    <string name="notif_transfer_failed">Failed to %1$s \'%2$s\'</string>
+    <string name="notif_sent">sent</string>
+    <string name="notif_received">received</string>
+    <string name="notif_send">send</string>
+    <string name="notif_receive">receive</string>
+    <string name="notif_generic_error">An error occurred. Please try again.</string>
+
+    <!-- Transfer Messages -->
+    <string name="msg_connecting_to">Connecting to %1$s…</string>
+    <string name="msg_connect_failed">Failed to connect to %1$s</string>
+    <string name="msg_clipboard_sent">Clipboard sent!</string>
+    <string name="msg_clipboard_failed">Failed to send clipboard</string>
+    <string name="label_file">file</string>
+    <string name="label_files">files</string>
+
+    <!-- Toasts and Dialogs -->
+    <string name="msg_clipboard_synced">Clipboard synced from PC</string>
+    <string name="msg_download_prepared_failed">Failed to prepare download: %1$s</string>
+    <string name="msg_login_success">Login Successful!</string>
+    <string name="msg_login_failed">Login failed: %1$s</string>
+    <string name="title_upload_to_device">Upload to device?</string>
+    <string name="msg_no_online_devices">No devices are online right now. Open Orbit on the target device first.</string>
+    <string name="btn_cancel">Cancel</string>
+
+    <string name="btn_cancel_transfer">Cancel</string>
+    <string name="msg_transfer_cancelled">Transfer cancelled</string>
 </resources>

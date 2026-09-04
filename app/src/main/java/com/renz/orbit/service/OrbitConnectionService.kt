@@ -9,7 +9,9 @@ import android.os.Build
 import android.os.IBinder
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
+import com.renz.orbit.R
 import com.renz.orbit.notification.NotificationHelper
+import java.util.Locale
 
 /**
  * Service yang tetap hidup di background, tugasnya CUMA 2:
@@ -41,6 +43,7 @@ class OrbitConnectionService : Service() {
     }
 
     override fun onCreate() {
+        updateLocale()
         super.onCreate()
         OrbitRuntime.init(this)
 
@@ -59,6 +62,8 @@ class OrbitConnectionService : Service() {
     }
 
     override fun onStartCommand(intent: Intent?, flags: Int, startId: Int): Int {
+        updateLocale()
+        updateNotification()
         return START_STICKY
     }
 
@@ -113,11 +118,23 @@ class OrbitConnectionService : Service() {
                 val activeId = OrbitRuntime.activeConnectionDeviceId.value
                 val deviceName =
                     OrbitRuntime.devices.value.find { it.id == activeId }?.deviceName ?: "PC"
-                updateNotification("Connected to $deviceName")
+                updateNotification(getString(R.string.notif_service_connected, deviceName))
             } else {
                 updateNotification()
             }
         }
+    }
+
+    private fun updateLocale() {
+        val pref = getSharedPreferences("Settings", MODE_PRIVATE)
+        val lang = pref.getString("lang", "en") ?: "en"
+        val locale = Locale(lang)
+        Locale.setDefault(locale)
+
+        val config = resources.configuration
+        config.setLocale(locale)
+
+        resources.updateConfiguration(config, resources.displayMetrics)
     }
 
     private fun getRealDeviceName(): String {

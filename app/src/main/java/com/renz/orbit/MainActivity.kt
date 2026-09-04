@@ -58,6 +58,7 @@ import com.renz.orbit.ui.screen.LoginPage
 import com.renz.orbit.ui.screen.ProfileScreen
 import com.renz.orbit.ui.screen.SettingScreen
 import com.renz.orbit.ui.theme.OrbitTheme
+import kotlinx.coroutines.Job
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
@@ -153,7 +154,7 @@ class MainActivity : ComponentActivity() {
                     )
                 }
                 var transferStatus by remember { mutableStateOf<TransferStatus?>(null) }
-
+                var currentTransferJob by remember { mutableStateOf<Job?>(null) }
 
                 pendingShareUrisState = { uris -> pendingShareUris = uris }
 
@@ -199,7 +200,7 @@ class MainActivity : ComponentActivity() {
                                         clipboard.setPrimaryClip(clip)
                                         Toast.makeText(
                                             context,
-                                            "Clipboard tersinkron dari pc",
+                                            getString(R.string.msg_clipboard_synced),
                                             Toast.LENGTH_SHORT
                                         ).show()
                                     }
@@ -259,7 +260,10 @@ class MainActivity : ComponentActivity() {
                                                 fileName,
                                                 isSending = false,
                                                 success = false,
-                                                errorMessage = "Gagal menyiapkan file: ${e.message}"
+                                                errorMessage = getString(
+                                                    R.string.msg_download_prepared_failed,
+                                                    e.message
+                                                )
                                             )
                                         }
                                     }
@@ -293,6 +297,18 @@ class MainActivity : ComponentActivity() {
                                             )
                                         }
                                         currentDownloadName = null
+                                    }
+
+                                    "file-cancel" -> {
+                                        currentOutputStream = null
+                                        transferStatus = null
+                                        currentDownloadName = null
+                                        NotificationHelper.cancel(context, currentDownloadNotifId)
+                                        Toast.makeText(
+                                            context,
+                                            getString(R.string.msg_transfer_cancelled),
+                                            Toast.LENGTH_SHORT
+                                        ).show()
                                     }
                                 }
                             } catch (e: Exception) {
@@ -338,13 +354,14 @@ class MainActivity : ComponentActivity() {
                 ) { uri: Uri? ->
                     val targetDevice = pendingSendTarget
                     if (uri == null || targetDevice == null) return@rememberLauncherForActivityResult
-                    scope.launch {
+                    currentTransferJob = scope.launch {
                         TransferManager.sendFilesToDevice(
                             context,
                             targetDevice,
                             listOf(uri),
                             onProgress = { transferStatus = it }
                         )
+                        currentTransferJob = null
                     }
                 }
 
@@ -353,13 +370,17 @@ class MainActivity : ComponentActivity() {
                         scope.launch {
                             try {
                                 authManager.firebaseAuthWithGoogleSignInResult(result.data)
-                                Toast.makeText(context, "Login Berhasil!", Toast.LENGTH_SHORT)
+                                Toast.makeText(
+                                    context,
+                                    getString(R.string.msg_login_success),
+                                    Toast.LENGTH_SHORT
+                                )
                                     .show()
                             } catch (e: Exception) {
                                 Log.e("MainActivity", "Login Google gagal: ${e.message}")
                                 Toast.makeText(
                                     context,
-                                    "Login gagal: ${e.message}",
+                                    getString(R.string.msg_login_failed, e.message),
                                     Toast.LENGTH_LONG
                                 ).show()
                             }
@@ -401,6 +422,17 @@ class MainActivity : ComponentActivity() {
                                 },
                                 onSettingClick = {
                                     currentScreen = Screen.Setting
+                                },
+                                onCancelTransfer = {
+                                    currentTransferJob?.cancel()
+                                    currentTransferJob = null
+                                    transferStatus = null
+
+                                    scope.launch {
+                                        val cancelMsg = org.json.JSONObject()
+                                            .apply { put("type", "file-cancel") }
+                                        OrbitRuntime.webRtcManager.sendData(cancelMsg.toString())
+                                    }
                                 },
                                 transferStatus = transferStatus,
                                 modifier = Modifier
@@ -446,11 +478,11 @@ class MainActivity : ComponentActivity() {
                             otherDevices.filter { it.status.lowercase() == "online" }
                         AlertDialog(
                             onDismissRequest = { pendingShareUris = emptyList() },
-                            title = { Text("Upload to device?") },
+                            title = { Text(stringResource(R.string.title_upload_to_device)) },
                             text = {
                                 Column {
                                     if (onlineDevices.isEmpty()) {
-                                        Text("Ga ada device yang online sekarang. Buka Orbit di device tujuan dulu.")
+                                        Text(stringResource(R.string.msg_no_online_devices))
                                     } else {
                                         onlineDevices.forEach { device ->
                                             Surface(
@@ -481,7 +513,10 @@ class MainActivity : ComponentActivity() {
                                 Surface(modifier = Modifier.clickable {
                                     pendingShareUris = emptyList()
                                 }) {
-                                    Text("Batal", modifier = Modifier.padding(8.dp))
+                                    Text(
+                                        stringResource(R.string.btn_cancel),
+                                        modifier = Modifier.padding(8.dp)
+                                    )
                                 }
                             }
                         )
@@ -520,11 +555,17 @@ class MainActivity : ComponentActivity() {
         intent.data?.let { uri ->
             authManager.handleDeepLinkIntent(
                 uri = uri,
-                onSuccess = { Toast.makeText(this, "Login Berhasil!", Toast.LENGTH_SHORT).show() },
+                onSuccess = {
+                    Toast.makeText(
+                        this,
+                        getString(R.string.msg_login_success),
+                        Toast.LENGTH_SHORT
+                    ).show()
+                },
                 onError = { e ->
                     Toast.makeText(
                         this,
-                        "Login Gagal: ${e.message}",
+                        getString(R.string.msg_login_failed, e.message),
                         Toast.LENGTH_LONG
                     ).show()
                 }

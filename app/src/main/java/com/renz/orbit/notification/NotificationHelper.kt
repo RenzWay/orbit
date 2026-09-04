@@ -53,33 +53,33 @@ object NotificationHelper {
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_STATUS,
-                "Status Device",
+                context.getString(R.string.notif_channel_status_name),
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = "Alert device online/offline" }
+            ).apply { description = context.getString(R.string.notif_channel_status_desc) }
         )
 
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_PROGRESS,
-                "Progress Transfer",
+                context.getString(R.string.notif_channel_progress_name),
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = "Progress transfer file is being sent" }
+            ).apply { description = context.getString(R.string.notif_channel_progress_desc) }
         )
 
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_RESULT,
-                "Transfer result",
+                context.getString(R.string.notif_channel_result_name),
                 NotificationManager.IMPORTANCE_HIGH
-            ).apply { description = "Alert file transfer result success/failed" }
+            ).apply { description = context.getString(R.string.notif_channel_result_desc) }
         )
 
         manager.createNotificationChannel(
             NotificationChannel(
                 CHANNEL_SERVICE,
-                "Orbit -- Status Background service",
+                context.getString(R.string.notif_channel_service_name),
                 NotificationManager.IMPORTANCE_DEFAULT
-            ).apply { description = "Keep Orbit connected and ready to receive shipments" }
+            ).apply { description = context.getString(R.string.notif_channel_service_desc) }
         )
     }
 
@@ -108,8 +108,8 @@ object NotificationHelper {
         }
 
         val notification = NotificationCompat.Builder(context, CHANNEL_STATUS)
-            .setContentTitle("$deviceName now online")
-            .setContentText("Ready for file transfer")
+            .setContentTitle(context.getString(R.string.notif_device_online, deviceName))
+            .setContentText(context.getString(R.string.notif_ready_transfer))
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openAppIntent(context))
             .setPriority(NotificationCompat.PRIORITY_HIGH)
@@ -147,9 +147,12 @@ object NotificationHelper {
             }
         }
 
-        val verb = if (isSending) "Sending" else "Receiving"
+        val title = context.getString(
+            if (isSending) R.string.notif_sending_file else R.string.notif_receiving_file,
+            fileName
+        )
         val notification = NotificationCompat.Builder(context, CHANNEL_PROGRESS)
-            .setContentTitle("$verb $fileName")
+            .setContentTitle(title)
             .setContentText("$progressPercent%")
             .setSmallIcon(R.drawable.ic_orbit)
             .setProgress(100, progressPercent, false)
@@ -186,9 +189,17 @@ object NotificationHelper {
             }
         }
 
-        val verb = if (isSending) "Sending" else "Receiving"
-        val title = if (success) "'$fileName' Success $verb" else "Failed $verb '$fileName'"
-        val text = if (success) null else (errorMessage ?: "An error occurred. Please try again.")
+        val verb =
+            context.getString(if (isSending) R.string.notif_sent else R.string.notif_received)
+        val action =
+            context.getString(if (isSending) R.string.notif_send else R.string.notif_receive)
+        val title = if (success) {
+            context.getString(R.string.notif_transfer_success, fileName, verb)
+        } else {
+            context.getString(R.string.notif_transfer_failed, action, fileName)
+        }
+        val text =
+            if (success) null else (errorMessage ?: context.getString(R.string.notif_generic_error))
         val builder = NotificationCompat.Builder(context, CHANNEL_RESULT)
             .setContentTitle(title)
             .setSmallIcon(R.drawable.ic_orbit)
@@ -200,13 +211,15 @@ object NotificationHelper {
         NotificationManagerCompat.from(context).notify(id, builder.build())
     }
 
-    fun buildServiceNotification(context: Context, statusText: String? = null): Notification {
+    fun buildServiceNotification(
+        context: Context,
+        statusText: String? = null
+    ): Notification {
         ensureChannels(context)
-        val contentText =
-            statusText ?: "Ready to receive files and clipboard content from other devices"
+        val contentText = statusText ?: context.getString(R.string.notif_service_ready)
 
         return NotificationCompat.Builder(context, CHANNEL_SERVICE)
-            .setContentTitle("Orbit Active")
+            .setContentTitle(context.getString(R.string.notif_orbit_active))
             .setContentText(contentText)
             .setSmallIcon(R.drawable.ic_orbit)
             .setContentIntent(openAppIntent(context))

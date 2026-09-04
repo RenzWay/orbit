@@ -51,7 +51,7 @@ fun ProfileScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
                 IconButton(onClick = { onBack() }) {
                     Icon(
                         imageVector = Icons.Default.ArrowBack,
-                        contentDescription = "Back"
+                        contentDescription = stringResource(R.string.btn_cancel)
                     )
                 }
             },
@@ -69,7 +69,7 @@ fun ProfileScreen(onBack: () -> Unit, modifier: Modifier = Modifier) {
             horizontalAlignment = Alignment.CenterHorizontally
         ) {
             Text(
-                text = currentUser?.displayName ?: "User",
+                text = currentUser?.displayName ?: stringResource(R.string.account_icon_text),
                 style = MaterialTheme.typography.headlineSmall
             )
 

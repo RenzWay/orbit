@@ -5,6 +5,7 @@ import android.net.Uri
 import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
+import com.renz.orbit.R
 import com.renz.orbit.data.TransferStatus
 import com.renz.orbit.notification.NotificationHelper
 import org.json.JSONObject
@@ -30,7 +31,7 @@ object TransferManager {
             if (!webRtcManager.isDataChannelOpen()) {
                 Toast.makeText(
                     context,
-                    "Menyambungkan ke ${targetDevice.deviceName}...",
+                    context.getString(R.string.msg_connecting_to, targetDevice.deviceName),
                     Toast.LENGTH_SHORT
                 ).show()
                 OrbitRuntime.setActiveConnection(targetDevice.id)
@@ -41,13 +42,15 @@ object TransferManager {
                 )
                 val connected = webRtcManager.awaitDataChannelOpen()
                 if (!connected) {
+                    val fileLabel = if (uris.size == 1) context.getString(R.string.label_file) else "${uris.size} ${context.getString(
+                        R.string.label_files)}"
                     NotificationHelper.showTransferResult(
                         context,
                         connectNotifId,
-                        if (uris.size == 1) "file" else "${uris.size} file",
+                        fileLabel,
                         isSending = true,
                         success = false,
-                        errorMessage = "Gagal konek ke ${targetDevice.deviceName}"
+                        errorMessage = context.getString(R.string.msg_connect_failed, targetDevice.deviceName)
                     )
                     OrbitRuntime.setActiveConnection(null)
                     return
@@ -128,6 +131,7 @@ object TransferManager {
                 }
             }
             webRtcManager.awaitBufferedAmountDrained()
+            kotlinx.coroutines.delay(1500.milliseconds)
             onProgress(null)
         } catch (e: Exception) {
             Log.e("TransferManager", "Gagal kirim file: ${e.message}")
@@ -151,7 +155,7 @@ object TransferManager {
                 if (!connected) {
                     Toast.makeText(
                         context,
-                        "Gagal konek ke ${targetDevice.deviceName}",
+                        context.getString(R.string.msg_connect_failed, targetDevice.deviceName),
                         Toast.LENGTH_LONG
                     ).show()
                     OrbitRuntime.setActiveConnection(null)
@@ -159,10 +163,11 @@ object TransferManager {
                 }
             }
             webRtcManager.sendClipboard(text)
-            Toast.makeText(context, "Clipboard terkirim!", Toast.LENGTH_SHORT).show()
+            Toast.makeText(context, context.getString(R.string.msg_clipboard_sent), Toast.LENGTH_SHORT).show()
             webRtcManager.awaitBufferedAmountDrained()
         } catch (e: Exception) {
             Log.e("TransferManager", "Gagal kirim clipboard: ${e.message}")
+            Toast.makeText(context, context.getString(R.string.msg_clipboard_failed), Toast.LENGTH_SHORT).show()
             webRtcManager.closeConnection()
             OrbitRuntime.setActiveConnection(null)
         }

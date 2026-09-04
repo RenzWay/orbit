@@ -34,7 +34,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
 import com.renz.orbit.R
+import com.renz.orbit.service.OrbitConnectionService
 import com.renz.orbit.ui.components.DialogLang
+import com.renz.orbit.ui.components.LanguageOption
 import com.renz.orbit.ui.components.SwitchTheme
 import com.renz.orbit.ui.theme.OrbitTheme
 
@@ -110,6 +112,7 @@ fun SettingScreen(
                 Text(stringResource(R.string.change_language))
             }
             if (showDialog) {
+                val lang = pref.getString("lang", "en") ?: "en"
                 DialogLang(onDismissRequest = { showDialog = false }) {
                     Text(
                         text = stringResource(R.string.choose_language),
@@ -118,29 +121,28 @@ fun SettingScreen(
                         fontWeight = FontWeight.Bold,
                         modifier = Modifier.padding(bottom = 20.dp)
                     )
-                    // Tombol untuk Bahasa Indonesia
-                    Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                        val pref = context.getSharedPreferences(
-                            "Settings",
-                            Context.MODE_PRIVATE
-                        )
-                        pref.edit { putString("lang", "in") }
-                        activity?.recreate()
-                    }) {
-                        Text("Bahasa Indonesia")
-                    }
 
-                    // Tombol untuk Bahasa Inggris
-                    Button(modifier = Modifier.fillMaxWidth(), onClick = {
-                        val pref = context.getSharedPreferences(
-                            "Settings",
-                            Context.MODE_PRIVATE
-                        )
-                        pref.edit { putString("lang", "en") }
-                        activity?.recreate()
-                    }) {
-                        Text("English")
-                    }
+                    LanguageOption(
+                        title = "Bahasa Indonesia",
+                        isSelected = lang == "in",
+                        onSelect = {
+                            pref.edit { putString("lang", "in") }
+                            OrbitConnectionService.start(context)
+                            activity?.recreate()
+                        }
+                    )
+
+                    Spacer(modifier = Modifier.height(8.dp))
+
+                    LanguageOption(
+                        title = "English",
+                        isSelected = lang == "en",
+                        onSelect = {
+                            pref.edit { putString("lang", "en") }
+                            OrbitConnectionService.start(context)
+                            activity?.recreate()
+                        }
+                    )
                 }
             }
         }
