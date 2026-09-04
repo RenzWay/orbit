@@ -60,6 +60,14 @@
           }
         },
         {
+          "client_id": "980332186200-r58jisc8rus6ivlvg8furet3jh5mv9of.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.renz.orbit",
+            "certificate_hash": "5d104e39ec48da9ce71488f3059f2ce86415e8a4"
+          }
+        },
+        {
           "client_id": "980332186200-1kon3qpbo76m9r0s70gu6qcmeo2libtn.apps.googleusercontent.com",
           "client_type": 3
         }
