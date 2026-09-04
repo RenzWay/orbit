@@ -1,19 +1,14 @@
 package com.renz.orbit.service
 
-import android.app.Notification
-import android.app.NotificationChannel
 import android.app.NotificationManager
-import android.app.PendingIntent
 import android.app.Service
 import android.content.Context
 import android.content.Intent
+import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
-import androidx.core.app.NotificationCompat
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
-import com.renz.orbit.MainActivity
-import com.renz.orbit.R
 import com.renz.orbit.notification.NotificationHelper
 
 /**
@@ -35,9 +30,6 @@ import com.renz.orbit.notification.NotificationHelper
  */
 class OrbitConnectionService : Service() {
     companion object {
-        private const val CHANNEL_ID = "orbit_background_service"
-        private const val NOTIFICATION_ID = 1001
-
         fun start(context: Context) {
             val intent = Intent(context, OrbitConnectionService::class.java)
             ContextCompat.startForegroundService(context, intent)
@@ -51,7 +43,18 @@ class OrbitConnectionService : Service() {
     override fun onCreate() {
         super.onCreate()
         OrbitRuntime.init(this)
-        startForeground(NOTIFICATION_ID, buildNotification())
+
+        val notification = NotificationHelper.buildServiceNotification(this)
+
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
+            startForeground(
+                NotificationHelper.SERVICE_NOTIFICATION_ID,
+                notification,
+                ServiceInfo.FOREGROUND_SERVICE_TYPE_DATA_SYNC
+            )
+        } else {
+            startForeground(NotificationHelper.SERVICE_NOTIFICATION_ID, notification)
+        }
         startListening()
     }
 
@@ -130,40 +133,8 @@ class OrbitConnectionService : Service() {
     private fun updateNotification(statusText: String? = null) {
         val notificationManager =
             getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
-        notificationManager.notify(NOTIFICATION_ID, buildNotification(statusText))
-    }
-
-    private fun buildNotification(statusText: String? = null): Notification {
-        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O) {
-            val channel = NotificationChannel(
-                CHANNEL_ID,
-                "Orbit — Status background service",
-                // IMPORTANCE_LOW = muncul di status bar TAPI ga bunyi/getar/
-                // nyembul (heads-up). Ini yang bikin "senyap" kayak yang
-                // kamu maksud kemarin.
-                NotificationManager.IMPORTANCE_LOW
-            ).apply {
-                description = "Keep Orbit connected and ready to receive shipments"
-            }
-            val manager = getSystemService(NotificationManager::class.java)
-            manager.createNotificationChannel(channel)
-        }
-
-        val openIntent = PendingIntent.getActivity(
-            this, 0, Intent(this, MainActivity::class.java),
-            PendingIntent.FLAG_IMMUTABLE
-        )
-
-        val contentText = statusText ?: "Ready to receive files and clipboard content from other devices"
-
-        return NotificationCompat.Builder(this, CHANNEL_ID)
-            .setContentTitle("Orbit active")
-            .setContentText(contentText)
-            .setSmallIcon(R.drawable.ic_orbit)
-            .setContentIntent(openIntent)
-            .setOngoing(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
-            .build()
+        val notification = NotificationHelper.buildServiceNotification(this, statusText)
+        notificationManager.notify(NotificationHelper.SERVICE_NOTIFICATION_ID, notification)
     }
 
     override fun onDestroy() {

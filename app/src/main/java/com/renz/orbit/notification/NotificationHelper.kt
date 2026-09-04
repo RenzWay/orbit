@@ -1,6 +1,7 @@
 package com.renz.orbit.notification
 
 import android.Manifest
+import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
@@ -39,7 +40,8 @@ object NotificationHelper {
     private const val CHANNEL_STATUS = "orbit_device_status"
     private const val CHANNEL_PROGRESS = "orbit_transfer_progress"
     private const val CHANNEL_RESULT = "orbit_transfer_result"
-
+    const val CHANNEL_SERVICE = "orbit_background_service"
+    const val SERVICE_NOTIFICATION_ID = 1001
     private var nextNotificationId = 2000
     fun newTransferId(): Int = nextNotificationId++
 
@@ -70,6 +72,14 @@ object NotificationHelper {
                 "Transfer result",
                 NotificationManager.IMPORTANCE_DEFAULT
             ).apply { description = "Alert file transfer result success/failed" }
+        )
+
+        manager.createNotificationChannel(
+            NotificationChannel(
+                CHANNEL_SERVICE,
+                "Orbit -- Status Background service",
+                NotificationManager.IMPORTANCE_UNSPECIFIED
+            ).apply { description = "Keep Orbit connected and ready to receive shipments" }
         )
     }
 
@@ -102,7 +112,7 @@ object NotificationHelper {
             .setContentText("Ready for file transfer")
             .setSmallIcon(R.drawable.ic_notification)
             .setContentIntent(openAppIntent(context))
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .setAutoCancel(true)
             .build()
 
@@ -145,7 +155,7 @@ object NotificationHelper {
             .setProgress(100, progressPercent, false)
             .setOngoing(true)
             .setOnlyAlertOnce(true)
-            .setPriority(NotificationCompat.PRIORITY_LOW)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
             .build()
 
         NotificationManagerCompat.from(context).notify(id, notification)
@@ -188,6 +198,21 @@ object NotificationHelper {
             .setPriority(if (success) NotificationCompat.PRIORITY_DEFAULT else NotificationCompat.PRIORITY_HIGH)
         if (text != null) builder.setContentText(text)
         NotificationManagerCompat.from(context).notify(id, builder.build())
+    }
+
+    fun buildServiceNotification(context: Context, statusText: String? = null): Notification {
+        ensureChannels(context)
+        val contentText =
+            statusText ?: "Ready to receive files and clipboard content from other devices"
+
+        return NotificationCompat.Builder(context, CHANNEL_SERVICE)
+            .setContentTitle("Orbit Active")
+            .setContentText(contentText)
+            .setSmallIcon(R.drawable.ic_orbit)
+            .setContentIntent(openAppIntent(context))
+            .setOngoing(true)
+            .setPriority(NotificationCompat.PRIORITY_HIGH)
+            .build()
     }
 
     fun cancel(context: Context, id: Int) {
