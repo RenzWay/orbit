@@ -37,10 +37,10 @@ import com.renz.orbit.notification.NotificationHelper.showTransferResult
  * dipanggil di awal tiap fungsi, aman dipanggil berkali-kali).
  */
 object NotificationHelper {
-    private const val CHANNEL_STATUS = "orbit_device_status"
-    private const val CHANNEL_PROGRESS = "orbit_transfer_progress"
-    private const val CHANNEL_RESULT = "orbit_transfer_result"
-    const val CHANNEL_SERVICE = "orbit_background_service"
+    private const val CHANNEL_STATUS = "orbit_device_status_v3"
+    private const val CHANNEL_PROGRESS = "orbit_transfer_progress_v3"
+    private const val CHANNEL_RESULT = "orbit_transfer_result_v3"
+    const val CHANNEL_SERVICE = "orbit_background_service_v2"
     const val SERVICE_NOTIFICATION_ID = 1001
     private var nextNotificationId = 2000
     fun newTransferId(): Int = nextNotificationId++
@@ -54,7 +54,7 @@ object NotificationHelper {
             NotificationChannel(
                 CHANNEL_STATUS,
                 "Status Device",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_HIGH
             ).apply { description = "Alert device online/offline" }
         )
 
@@ -62,7 +62,7 @@ object NotificationHelper {
             NotificationChannel(
                 CHANNEL_PROGRESS,
                 "Progress Transfer",
-                NotificationManager.IMPORTANCE_LOW
+                NotificationManager.IMPORTANCE_HIGH
             ).apply { description = "Progress transfer file is being sent" }
         )
 
@@ -70,7 +70,7 @@ object NotificationHelper {
             NotificationChannel(
                 CHANNEL_RESULT,
                 "Transfer result",
-                NotificationManager.IMPORTANCE_DEFAULT
+                NotificationManager.IMPORTANCE_HIGH
             ).apply { description = "Alert file transfer result success/failed" }
         )
 
@@ -78,7 +78,7 @@ object NotificationHelper {
             NotificationChannel(
                 CHANNEL_SERVICE,
                 "Orbit -- Status Background service",
-                NotificationManager.IMPORTANCE_UNSPECIFIED
+                NotificationManager.IMPORTANCE_DEFAULT
             ).apply { description = "Keep Orbit connected and ready to receive shipments" }
         )
     }
