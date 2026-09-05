@@ -4,31 +4,31 @@ class DeviceInfoService {
   final DeviceInfoPlugin _deviceInfo = DeviceInfoPlugin();
 
   Future<String> getDeviceName() async {
-    if (await _deviceInfo.deviceInfo is LinuxDeviceInfo) {
-      final info = await _deviceInfo.linuxInfo;
-      return info.prettyName;
-    }
-
     if (await _deviceInfo.deviceInfo is WindowsDeviceInfo) {
       final info = await _deviceInfo.windowsInfo;
-      return info.computerName;
+      return '${info.computerName} (Windows)';
+    }
+
+    if (await _deviceInfo.deviceInfo is LinuxDeviceInfo) {
+      final info = await _deviceInfo.linuxInfo;
+      return '${info.name} (Linux)';
     }
 
     if (await _deviceInfo.deviceInfo is AndroidDeviceInfo) {
       final info = await _deviceInfo.androidInfo;
-      return info.model;
+      return '${info.model} (Android)';
     }
 
     if (await _deviceInfo.deviceInfo is MacOsDeviceInfo) {
       final info = await _deviceInfo.macOsInfo;
-      return info.computerName;
+      return '${info.computerName} (macOS)';
     }
 
     if (await _deviceInfo.deviceInfo is IosDeviceInfo) {
       final info = await _deviceInfo.iosInfo;
-      return info.model;
+      return '${info.model} (iOS)';
     }
 
-    return 'Unknown Devices';
+    return 'Unknown Device';
   }
 }

@@ -5,15 +5,15 @@ import 'package:file_picker/file_picker.dart';
 import 'package:orbit/models/device.dart';
 import 'package:orbit/models/staged_file.dart';
 import 'package:orbit/screen/home/home_state.dart';
+import 'package:orbit/service/clipboard/clipboard_service.dart';
 import 'package:orbit/service/device/device_service.dart';
 import 'package:orbit/service/transfer/file_metadata.dart';
 import 'package:orbit/service/transfer/file_transfer_service.dart';
 import 'package:orbit/service/transfer/transfer_id.dart';
-import 'package:orbit/service/webrtc/webrtc_connection_state.dart';
-import 'package:orbit/service/webrtc/webrtc_service.dart';
-import 'package:orbit/service/clipboard/clipboard_service.dart';
 import 'package:orbit/service/webrtc/connection_service.dart';
 import 'package:orbit/service/webrtc/connection_session.dart';
+import 'package:orbit/service/webrtc/webrtc_connection_state.dart';
+import 'package:orbit/service/webrtc/webrtc_service.dart';
 
 class HomeController {
   final DeviceService _deviceService;
@@ -63,26 +63,25 @@ class HomeController {
     await _deviceService.setOnline(userId: userId);
   }
 
-  void watchDevices(String userId) {
-    _deviceSubscription?.cancel();
+  Future<void> watchDevices(String userId) async {
+    final localDeviceId = await _deviceService.getDeviceId();
+
+    await _deviceSubscription?.cancel();
 
     _deviceSubscription = _deviceService.watchDevices(userId).listen((devices) {
+      final remoteDevices = devices
+          .where((device) => device.id != localDeviceId)
+          .toList();
+
       Device? selectedDevice = _state.selectedDevice;
 
-      if (selectedDevice == null && devices.isNotEmpty) {
-        selectedDevice = devices.first;
-      } else if (selectedDevice != null) {
-        final stillExists = devices.any(
-          (device) => device.id == selectedDevice!.id,
-        );
-
-        if (!stillExists) {
-          selectedDevice = devices.isNotEmpty ? devices.first : null;
-        }
+      if (selectedDevice != null &&
+          !remoteDevices.any((device) => device.id == selectedDevice!.id)) {
+        selectedDevice = null;
       }
 
       _updateState(
-        _state.copyWith(devices: devices, selectedDevice: selectedDevice),
+        _state.copyWith(devices: remoteDevices, selectedDevice: selectedDevice),
       );
     });
   }

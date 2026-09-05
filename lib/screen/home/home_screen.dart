@@ -53,7 +53,7 @@ class _HomeScreenState extends State<HomeScreen> {
       return;
     }
 
-    _controller.watchDevices(userId);
+    await _controller.watchDevices(userId);
 
     await _controller.watchIncomingConnections(userId);
     await _controller.registerCurrentDevice(userId);
