@@ -58,6 +58,13 @@
     <string name="theme_title">Tema</string>
     <string name="logout_desc">Keluar dari akun</string>
 
+    <!-- Label Pengaturan -->
+    <string name="setting_startup_title">Mulai Otomatis</string>
+    <string name="setting_startup_desc">Jalankan Orbit secara otomatis saat perangkat dinyalakan.</string>
+    <string name="setting_keep_alive_title">Tetap Aktif</string>
+    <string name="setting_keep_alive_desc">Mencegah sistem mematikan Orbit untuk hemat baterai.</string>
+    <string name="setting_always_on_title">Orbit Selalu Nyala</string>
+    <string name="setting_always_on_desc">Otomatis jalan saat HP nyala dan tetap aktif di latar belakang agar koneksi stabil.</string>
     <!-- Notifikasi -->
     <string name="notif_channel_service_name">Orbit — Layanan Latar Belakang</string>
     <string name="notif_channel_service_desc">Menjaga Orbit tetap terhubung dengan perangkat lain</string>

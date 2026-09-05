@@ -86,6 +86,11 @@ class WebRtcManager(private val context: Context) {
             while (true) {
                 kotlinx.coroutines.delay(60.seconds)
                 if (dataChannel?.state() != DataChannel.State.OPEN) continue
+
+                val pref = context.getSharedPreferences("Settings", Context.MODE_PRIVATE)
+                val autoStart = pref.getBoolean("auto_start", false)
+                if (autoStart) continue
+
                 val idleFor = System.currentTimeMillis() - lastActivityAt
                 if (idleFor >= IDLE_DISCONNECT_TIMEOUT.inWholeMilliseconds) {
                     Log.d(TAG, "Koneksi nganggur ${idleFor}ms, auto-disconnect buat hemat baterai.")

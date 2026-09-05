@@ -40,6 +40,8 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.renz.orbit.R
 import com.renz.orbit.notification.NotificationHelper
 import com.renz.orbit.service.OrbitConnectionService
+import com.renz.orbit.service.OrbitRuntime
+import com.renz.orbit.ui.components.AutoStartBtn
 import com.renz.orbit.ui.components.DialogLang
 import com.renz.orbit.ui.components.LanguageOption
 import com.renz.orbit.ui.components.SwitchTheme
@@ -62,15 +64,20 @@ fun SettingScreen(
         mutableStateOf(NotificationHelper.isNotificationListenerEnabled(context))
     }
 
-    // Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS gak punya result callback
-    // yang bisa diandelin di semua vendor (vivo/Funtouch dkk suka gak balikin
-    // RESULT_OK yang bener), jadi status-nya kita re-check tiap kali screen ini
-    // balik ke foreground (ON_RESUME) — bukan cuma tiap konfirmasi.
+    var isBatteryIgnored by remember {
+        mutableStateOf(NotificationHelper.isBatteryOptimizationIgnored(context))
+    }
+
+    var isAutoStartEnabled by remember {
+        mutableStateOf(pref.getBoolean("auto_start", false))
+    }
+
     val lifecycleOwner = LocalLifecycleOwner.current
     DisposableEffect(lifecycleOwner) {
         val observer = LifecycleEventObserver { _, event ->
             if (event == Lifecycle.Event.ON_RESUME) {
                 isNotifAccessEnabled = NotificationHelper.isNotificationListenerEnabled(context)
+                isBatteryIgnored = NotificationHelper.isBatteryOptimizationIgnored(context)
             }
         }
         lifecycleOwner.lifecycle.addObserver(observer)
@@ -116,8 +123,6 @@ fun SettingScreen(
                 onThemeSelected = { newTheme ->
                     currentTheme = newTheme
                     pref.edit { putString("theme", newTheme) }
-
-                    // 4. Panggil callback ini (ini yang bikin smooth!)
                     onThemeChange(newTheme)
                 }
             )
@@ -135,6 +140,7 @@ fun SettingScreen(
             Button(modifier = Modifier.fillMaxWidth(), onClick = { showDialog = true }) {
                 Text(stringResource(R.string.change_language))
             }
+
             if (showDialog) {
                 val lang = pref.getString("lang", "en") ?: "en"
                 DialogLang(onDismissRequest = { showDialog = false }) {
@@ -172,33 +178,68 @@ fun SettingScreen(
 
             Spacer(modifier = Modifier.height(32.dp))
 
-            Text(
-                text = stringResource(R.string.notification_mirror_title),
-                style = MaterialTheme.typography.titleMedium,
-                modifier = Modifier
-                    .align(Alignment.Start)
-                    .padding(bottom = 4.dp)
+            // HANYA SATU TOMBOL UNTUK SEMUA
+            AutoStartBtn(
+                title = stringResource(R.string.setting_always_on_title),
+                text = stringResource(R.string.setting_always_on_desc),
+                isAutoStartEnabled = isAutoStartEnabled, // Pake state auto_start
+                onAutoStartChange = { enabled ->
+                    isAutoStartEnabled = enabled
+                    // 1. Simpan settingan Startup
+                    pref.edit { putBoolean("auto_start", enabled) }
+
+                    // 2. Kalau dinyalain, sekalian minta izin Baterai (Popup)
+                    if (enabled) {
+                        NotificationHelper.requestIgnoreBatteryOptimizations(context)
+                    }
+                }
             )
 
-            Text(
+//            // 1. Tombol MULAI OTOMATIS (Startup)
+//            AutoStartBtn(
+//                title = stringResource(R.string.setting_startup_title),
+//                text = stringResource(R.string.setting_startup_desc),
+//                isAutoStartEnabled = isAutoStartEnabled,
+//                onAutoStartChange = { enabled ->
+//                    isAutoStartEnabled = enabled
+//                    pref.edit { putBoolean("auto_start", enabled) }
+//                }
+//            )
+//
+//            Spacer(modifier = Modifier.height(16.dp))
+//
+//            // 2. Tombol Izin Baterai (Anti-Mati)
+//            AutoStartBtn(
+//                title = stringResource(R.string.setting_keep_alive_title),
+//                text = stringResource(R.string.setting_keep_alive_desc),
+//                isAutoStartEnabled = isBatteryIgnored,
+//                onAutoStartChange = { enabled ->
+//                    if (enabled) {
+//                        NotificationHelper.requestIgnoreBatteryOptimizations(context)
+//                    } else {
+//                        NotificationHelper.openBatteryOptimizationSettings(context)
+//                    }
+//                }
+//            )
+
+            Spacer(modifier = Modifier.height(16.dp))
+
+            // 3. Tombol Notification Mirror
+            AutoStartBtn(
+                title = stringResource(R.string.notification_mirror_title),
                 text = stringResource(
                     if (isNotifAccessEnabled) R.string.notification_access_granted
                     else R.string.notification_access_not_granted
                 ),
-                style = MaterialTheme.typography.bodyMedium,
-                modifier = Modifier
-                    .align(Alignment.Start)
-                    .padding(bottom = 12.dp)
-            )
-
-            if (!isNotifAccessEnabled) {
-                Button(
-                    modifier = Modifier.fillMaxWidth(),
-                    onClick = { NotificationHelper.openNotificationListenerSettings(context) }
-                ) {
-                    Text(stringResource(R.string.btn_enable_notification_access))
+                isAutoStartEnabled = isNotifAccessEnabled,
+                onAutoStartChange = { enabled ->
+                    if (enabled) {
+                        NotificationHelper.openNotificationListenerSettings(context)
+                    } else {
+                        NotificationHelper.openNotificationListenerSettings(context)
+                    }
                 }
-            }
+            )
         }
     }
 }
@@ -212,6 +253,5 @@ private fun SettingScreenPreview() {
             modifier = Modifier,
             onThemeChange = {}
         )
-
     }
 }

@@ -58,6 +58,14 @@
     <string name="theme_title">Theme</string>
     <string name="logout_desc">Log out from your account</string>
 
+    <!-- Settings Labels -->
+    <string name="setting_startup_title">Startup App</string>
+    <string name="setting_startup_desc">Launch Orbit automatically when the device is turned on.</string>
+    <string name="setting_keep_alive_title">Stay Active</string>
+    <string name="setting_keep_alive_desc">Prevents Android from killing Orbit to save battery.</string>
+    <string name="setting_always_on_title">Orbit always on</string>
+    <string name="setting_always_on_desc">Starts automatically when the phone turns on and remains active in the background to ensure a stable connection.</string>
+
     <!-- Notifications -->
     <string name="notif_channel_service_name">Orbit — Background Service</string>
     <string name="notif_channel_service_desc">Keeps Orbit connected to other devices</string>
