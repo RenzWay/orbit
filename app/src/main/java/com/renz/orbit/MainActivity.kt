@@ -155,6 +155,7 @@ class MainActivity : ComponentActivity() {
                 }
                 var transferStatus by remember { mutableStateOf<TransferStatus?>(null) }
                 var currentTransferJob by remember { mutableStateOf<Job?>(null) }
+                val isInitialLoading by OrbitRuntime.isInitialLoading.collectAsState()
 
                 pendingShareUrisState = { uris -> pendingShareUris = uris }
 
@@ -395,6 +396,7 @@ class MainActivity : ComponentActivity() {
                         is Screen.Home ->
                             HomeScreen(
                                 devices = otherDevices,
+                                isInitialLoading =isInitialLoading,
                                 isOrbitActive = isOrbitActive,
                                 onSendFile = { device ->
                                     pendingSendTarget = device

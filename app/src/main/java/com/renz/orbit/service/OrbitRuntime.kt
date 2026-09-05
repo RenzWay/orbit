@@ -1,6 +1,7 @@
 package com.renz.orbit.service
 
 import android.content.Context
+import com.renz.orbit.service.OrbitRuntime.devices
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
 import kotlinx.coroutines.flow.asStateFlow
@@ -40,23 +41,27 @@ object OrbitRuntime {
 
     private var isInitialized = false
 
-     fun init(context: Context){
+    private val _isInitialLoading = MutableStateFlow(true)
+    val isInitialLoading: StateFlow<Boolean> = _isInitialLoading.asStateFlow()
+
+    fun init(context: Context) {
         if (isInitialized) return
         val appContext = context.applicationContext
         _orbitPresence = OrbitPresence(appContext)
         _webRtcManager = WebRtcManager(appContext)
-        isInitialized=true
+        isInitialized = true
     }
 
-    fun updateDevice(newDevice: List<Device>){
+    fun updateDevice(newDevice: List<Device>) {
         _devices.value = newDevice
+        _isInitialLoading.value = false
     }
 
     fun setActiveConnection(deviceId: String?) {
         _activeConnectionDeviceId.value = deviceId
     }
 
-    fun shutdown(){
+    fun shutdown() {
         _webRtcManager?.shutdown()
         _orbitPresence = null
         _webRtcManager = null

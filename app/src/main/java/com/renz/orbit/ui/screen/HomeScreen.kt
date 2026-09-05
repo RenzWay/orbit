@@ -8,19 +8,15 @@ import androidx.compose.animation.shrinkVertically
 import androidx.compose.animation.slideInVertically
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.foundation.layout.Arrangement
-import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.fillMaxSize
-import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
-import androidx.compose.material3.CircularProgressIndicator
 import androidx.compose.material3.ExperimentalMaterial3Api
-import androidx.compose.material3.LinearProgressIndicator
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.SnackbarHost
 import androidx.compose.material3.SnackbarHostState
@@ -32,7 +28,6 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.res.stringResource
@@ -45,6 +40,7 @@ import com.renz.orbit.data.TransferStatus
 import com.renz.orbit.service.Device
 import com.renz.orbit.service.OrbitRuntime
 import com.renz.orbit.ui.components.DeviceCard
+import com.renz.orbit.ui.components.DeviceCardSkeleton
 import com.renz.orbit.ui.components.HeaderHomeScreen
 import com.renz.orbit.ui.components.QuickActions
 import com.renz.orbit.ui.components.StatusBanner
@@ -58,13 +54,14 @@ import kotlin.time.Duration.Companion.milliseconds
 @Composable
 fun HomeScreen(
     devices: List<Device> = emptyList(),
+    isInitialLoading: Boolean = true,
     isOrbitActive: Boolean = true,
     onSendFile: (Device) -> Unit = {},
     onSyncClipboard: (Device) -> Unit = {},
     onUnsyncDevice: (Device) -> Unit = {},
     onAccountClick: () -> Unit = {},
     onSettingClick: () -> Unit = {},
-    onCancelTransfer: () ->Unit ={},
+    onCancelTransfer: () -> Unit = {},
     transferStatus: TransferStatus? = null,
     modifier: Modifier
 ) {
@@ -135,21 +132,9 @@ fun HomeScreen(
                     verticalArrangement = Arrangement.spacedBy(8.dp),
                     contentPadding = PaddingValues(bottom = 16.dp)
                 ) {
-                    if (isRefreshing && devices.isEmpty()) {
-                        item {
-                            Box(
-                                modifier = Modifier
-                                    .fillMaxWidth()
-                                    .padding(32.dp),
-                                contentAlignment = Alignment.Center
-                            ) {
-                                CircularProgressIndicator()
-//                                LoadingIndicator(
-//                                modifier = Modifier.size(48.dp), // Atur ukurannya
-//                                containerColor = MaterialTheme.colorScheme.primaryContainer, // Warna lingkaran luarnya (Gambar #2)
-//                                indicatorColor = MaterialTheme.colorScheme.primary // Warna bunga di dalamnya
-//                            )
-                            }
+                    if (isInitialLoading) {
+                        items(3) {
+                            DeviceCardSkeleton()
                         }
                     } else if (devices.isEmpty()) {
                         item {
