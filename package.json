@@ -1,7 +1,11 @@
 {
   "name": "Orbit",
   "private": true,
+<<<<<<< HEAD
   "version": "1.6.24-beta",
+=======
+  "version": "1.1.0",
+>>>>>>> a681f86 (FIX: fixing bug build cannot use the app, and update version)
   "type": "module",
   "main": "dist-electron/main.js",
   "scripts": {
