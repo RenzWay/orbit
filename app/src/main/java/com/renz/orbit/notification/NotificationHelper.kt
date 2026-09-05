@@ -5,17 +5,17 @@ import android.app.Notification
 import android.app.NotificationChannel
 import android.app.NotificationManager
 import android.app.PendingIntent
+import android.content.ComponentName
 import android.content.Context
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.os.Build
+import android.provider.Settings
 import androidx.core.app.NotificationCompat
 import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import com.renz.orbit.MainActivity
 import com.renz.orbit.R
-import com.renz.orbit.notification.NotificationHelper.newTransferId
-import com.renz.orbit.notification.NotificationHelper.showTransferResult
 
 /**
  * Pusat SEMUA notifikasi Orbit (di luar notifikasi "Orbit aktif" milik
@@ -37,6 +37,38 @@ import com.renz.orbit.notification.NotificationHelper.showTransferResult
  * dipanggil di awal tiap fungsi, aman dipanggil berkali-kali).
  */
 object NotificationHelper {
+    /**
+     * Cek apakah user udah nyalain "Notification access" buat Orbit di
+     * system Settings. NotificationListenerService CUMA bakal di-bind
+     * sama Android kalau ini true — gak bisa dicek/di-request lewat
+     * permission runtime biasa.
+     */
+    fun isNotificationListenerEnabled(context: Context): Boolean {
+        val enabledPackages = NotificationManagerCompat.getEnabledListenerPackages(context)
+        return context.packageName in enabledPackages
+    }
+
+    /**
+     * Buka halaman system Settings buat notification access langsung,
+     * biar user gak perlu nyari manual (apalagi di vendor skin kayak
+     * Funtouch/MIUI yang lokasinya suka beda-beda).
+     */
+    fun openNotificationListenerSettings(context: Context) {
+        val intent = Intent(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS).apply {
+            // Di Android 11+ (stock), ini bikin Settings langsung scroll/highlight
+            // ke Orbit. Vendor skin ada yang ignore extra ini, tapi gak masalah —
+            // paling fallback ke halaman list biasa.
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.R) {
+                putExtra(
+                    Settings.EXTRA_NOTIFICATION_LISTENER_COMPONENT_NAME,
+                    ComponentName(context, NotificationListener::class.java).flattenToString(),
+                )
+            }
+            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+        }
+        context.startActivity(intent)
+    }
+
     private const val CHANNEL_STATUS = "orbit_device_status_v3"
     private const val CHANNEL_PROGRESS = "orbit_transfer_progress_v3"
     private const val CHANNEL_RESULT = "orbit_transfer_result_v3"

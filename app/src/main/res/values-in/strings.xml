@@ -47,6 +47,10 @@
     <string name="setting_icon_text">Pengaturan</string>
     <string name="desc_settings">Pengaturan</string>
     <string name="change_language">Ganti Bahasa</string>
+    <string name="notification_mirror_title">Notification Mirror</string>
+    <string name="notification_access_granted">Akses notifikasi aktif. Notifikasi Android bakal ke-mirror ke PC kamu.</string>
+    <string name="notification_access_not_granted">Akses notifikasi belum nyala. Orbit belum bisa baca notifikasi kamu.</string>
+    <string name="btn_enable_notification_access">Aktifkan akses notifikasi</string>
     <string name="choose_language">Pilih Bahasa</string>
     <string name="language">Bahasa</string>
     <string name="sending_progress">Mengirim…</string>

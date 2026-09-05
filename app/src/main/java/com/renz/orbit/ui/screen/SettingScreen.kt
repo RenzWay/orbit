@@ -20,6 +20,7 @@ import androidx.compose.material3.Text
 import androidx.compose.material3.TopAppBar
 import androidx.compose.material3.TopAppBarDefaults
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -27,13 +28,17 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.compose.ui.platform.LocalLifecycleOwner
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.core.content.edit
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
 import com.renz.orbit.R
+import com.renz.orbit.notification.NotificationHelper
 import com.renz.orbit.service.OrbitConnectionService
 import com.renz.orbit.ui.components.DialogLang
 import com.renz.orbit.ui.components.LanguageOption
@@ -52,6 +57,25 @@ fun SettingScreen(
     var showDialog by remember { mutableStateOf(false) }
     val pref = remember { context.getSharedPreferences("Settings", Context.MODE_PRIVATE) }
     var currentTheme by remember { mutableStateOf(pref.getString("theme", "system") ?: "system") }
+
+    var isNotifAccessEnabled by remember {
+        mutableStateOf(NotificationHelper.isNotificationListenerEnabled(context))
+    }
+
+    // Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS gak punya result callback
+    // yang bisa diandelin di semua vendor (vivo/Funtouch dkk suka gak balikin
+    // RESULT_OK yang bener), jadi status-nya kita re-check tiap kali screen ini
+    // balik ke foreground (ON_RESUME) — bukan cuma tiap konfirmasi.
+    val lifecycleOwner = LocalLifecycleOwner.current
+    DisposableEffect(lifecycleOwner) {
+        val observer = LifecycleEventObserver { _, event ->
+            if (event == Lifecycle.Event.ON_RESUME) {
+                isNotifAccessEnabled = NotificationHelper.isNotificationListenerEnabled(context)
+            }
+        }
+        lifecycleOwner.lifecycle.addObserver(observer)
+        onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+    }
 
     BackHandler {
         onBack()
@@ -143,6 +167,36 @@ fun SettingScreen(
                             activity?.recreate()
                         }
                     )
+                }
+            }
+
+            Spacer(modifier = Modifier.height(32.dp))
+
+            Text(
+                text = stringResource(R.string.notification_mirror_title),
+                style = MaterialTheme.typography.titleMedium,
+                modifier = Modifier
+                    .align(Alignment.Start)
+                    .padding(bottom = 4.dp)
+            )
+
+            Text(
+                text = stringResource(
+                    if (isNotifAccessEnabled) R.string.notification_access_granted
+                    else R.string.notification_access_not_granted
+                ),
+                style = MaterialTheme.typography.bodyMedium,
+                modifier = Modifier
+                    .align(Alignment.Start)
+                    .padding(bottom = 12.dp)
+            )
+
+            if (!isNotifAccessEnabled) {
+                Button(
+                    modifier = Modifier.fillMaxWidth(),
+                    onClick = { NotificationHelper.openNotificationListenerSettings(context) }
+                ) {
+                    Text(stringResource(R.string.btn_enable_notification_access))
                 }
             }
         }

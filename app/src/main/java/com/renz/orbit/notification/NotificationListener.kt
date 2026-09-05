@@ -56,8 +56,14 @@ class NotificationListener : NotificationListenerService() {
     }
 
     private fun send(payload: String) {
-        if (OrbitRuntime.webRtcManager.isDataChannelOpen()) {
-            OrbitRuntime.webRtcManager.sendData(payload)
+        // OrbitRuntime bisa aja belum di-init kalau sistem nge-bind listener
+        // ini sebelum MainActivity/OrbitConnectionService sempet jalan
+        // (misal abis reboot). Getter-nya throw kalau belum init, jadi
+        // di-guard di sini biar notif lain tetep kekirim, bukan crash diem-diem.
+        val webRtcManager = runCatching { OrbitRuntime.webRtcManager }.getOrNull() ?: return
+
+        if (webRtcManager.isDataChannelOpen()) {
+            webRtcManager.sendData(payload)
         }
     }
 }

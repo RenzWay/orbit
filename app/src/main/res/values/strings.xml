@@ -1,3 +1,4 @@
+<?xml version="1.0" encoding="utf-8"?>
 <resources>
     <string name="app_name">Orbit</string>
 
@@ -46,6 +47,10 @@
     <string name="setting_icon_text">Setting</string>
     <string name="desc_settings">Setting</string>
     <string name="change_language">Change Language</string>
+    <string name="notification_mirror_title">Notification Mirror</string>
+    <string name="notification_access_granted">Notification access is enabled. Android notifications will be mirrored to your PC.</string>
+    <string name="notification_access_not_granted">Notification access is off. Orbit can\'t read your notifications yet.</string>
+    <string name="btn_enable_notification_access">Enable notification access</string>
     <string name="choose_language">Choose language</string>
     <string name="language">Language</string>
     <string name="sending_progress">Sending…</string>
