@@ -516,6 +516,7 @@ class WebRTCService implements WebRTCEventHandlers {
   ): Promise<void> {
     const key = String(parsed.key ?? "");
     const packageName = String(parsed.packageName ?? "");
+    const appLabel = String(parsed.appLabel ?? "").trim() || packageName;
     const title = String(parsed.title ?? "");
     const text = String(parsed.text ?? "");
 
@@ -524,6 +525,7 @@ class WebRTCService implements WebRTCEventHandlers {
     await window.electronAPI.showMirroredNotification({
       key,
       packageName,
+      appLabel,
       title,
       text,
     });

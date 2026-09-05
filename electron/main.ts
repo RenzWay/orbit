@@ -7,6 +7,7 @@ import {
   nativeImage,
   Notification,
   powerMonitor,
+  shell,
   Tray,
 } from "electron";
 import path from "node:path";
@@ -302,7 +303,14 @@ ipcMain.handle(
   "show-mirrored-notification",
   (
     _event,
-    payload: { key: string; packageName: string; title: string; text?: string },
+    payload: {
+      key: string;
+      packageName: string;
+      appLabel: string;
+      title: string;
+      text?: string;
+      webUrl?: string;
+    },
   ) => {
     if (!Notification.isSupported()) return;
 
@@ -310,8 +318,12 @@ ipcMain.handle(
     // tutup dulu supaya dianggap update, bukan notif baru.
     mirroredNotifications.get(payload.key)?.close();
 
+    const title = payload.title
+      ? `${payload.appLabel}: ${payload.title}`
+      : payload.appLabel || payload.packageName;
+
     const notification = new Notification({
-      title: payload.title || payload.packageName,
+      title,
       body: payload.text ?? "",
       silent: false,
       icon: nativeImage.createFromPath(getAppIconPath()),
@@ -320,11 +332,11 @@ ipcMain.handle(
     notification.on("click", () => {
       console.log("[notification] clicked:", payload.packageName, payload.key);
 
-      // Untuk checkpoint pertama:
-      // cukup munculkan Orbit dulu.
-      //
-      // Nanti checkpoint berikutnya bagian ini kita ubah
-      // jadi route ke desktop app / browser.
+      if (payload.webUrl) {
+        void shell.openExternal(payload.webUrl);
+        return;
+      }
+
       win?.show();
 
       if (win?.isMinimized()) {

@@ -1,8 +1,10 @@
 interface MirroredNotificationPayload {
   key: string;
   packageName: string;
+  appLabel: string;
   title: string;
   text?: string;
+  webUrl?: string;
 }
 
 interface Window {
