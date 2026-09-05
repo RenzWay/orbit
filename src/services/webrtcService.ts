@@ -499,11 +499,11 @@ class WebRTCService implements WebRTCEventHandlers {
           break;
 
         case "notification":
-          this.handleIncomingNotification(parsed);
+          await this.handleIncomingNotification(parsed);
           break;
 
         case "notification-removed":
-          this.handleNotificationRemoved(parsed);
+          await this.handleNotificationRemoved(parsed);
           break;
       }
     } catch (err) {

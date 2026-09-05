@@ -1,3 +1,10 @@
+interface MirroredNotificationPayload {
+  key: string;
+  packageName: string;
+  title: string;
+  text?: string;
+}
+
 interface Window {
   electronAPI: {
     openExternal: (url: string) => Promise<void>;
