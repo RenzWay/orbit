@@ -497,10 +497,46 @@ class WebRTCService implements WebRTCEventHandlers {
         case "clipboard":
           await this.handleIncomingClipboard(parsed);
           break;
+
+        case "notification":
+          this.handleIncomingNotification(parsed);
+          break;
+
+        case "notification-removed":
+          this.handleNotificationRemoved(parsed);
+          break;
       }
     } catch (err) {
       console.error("Gagal parse data WebRTC:", err);
     }
+  }
+
+  private async handleIncomingNotification(
+    parsed: Record<string, unknown>,
+  ): Promise<void> {
+    const key = String(parsed.key ?? "");
+    const packageName = String(parsed.packageName ?? "");
+    const title = String(parsed.title ?? "");
+    const text = String(parsed.text ?? "");
+
+    if (!key) return;
+
+    await window.electronAPI.showMirroredNotification({
+      key,
+      packageName,
+      title,
+      text,
+    });
+  }
+
+  private async handleNotificationRemoved(
+    parsed: Record<string, unknown>,
+  ): Promise<void> {
+    const key = String(parsed.key ?? "");
+
+    if (!key) return;
+
+    await window.electronAPI.closeMirroredNotification(key);
   }
 
   private handleIncomingFileMeta(meta: IncomingFileMeta) {

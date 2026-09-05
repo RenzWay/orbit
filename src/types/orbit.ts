@@ -28,3 +28,10 @@ export type DeviceCardProps = {
   onSelect: (device: Device) => void;
   onUnsync: (device: Device) => void;
 };
+
+export interface MirroredNotificationPayload {
+  key: string;
+  packageName: string;
+  title: string;
+  text?: string;
+}

@@ -35,4 +35,14 @@ contextBridge.exposeInMainWorld("electronAPI", {
   }) => ipcRenderer.invoke("notify", payload),
   closeNotification: (id: number) =>
     ipcRenderer.invoke("close-notification", id),
+  
+  showMirroredNotification: (payload: {
+    key: string;
+    packageName: string;
+    title: string;
+    text?: string;
+  }) => ipcRenderer.invoke("show-mirrored-notification", payload),
+
+  closeMirroredNotification: (key: string) =>
+    ipcRenderer.invoke("close-mirrored-notification", key),
 });

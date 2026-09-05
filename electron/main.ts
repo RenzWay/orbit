@@ -252,6 +252,7 @@ ipcMain.handle("get-device-info", () => {
 // nge-"update" notif yang sama (progress -> hasil) dengan cara nutup yang
 // lama sebelum nampilin yang baru, biar ga numpuk banyak notif per transfer.
 const activeNotifications = new Map<number, Notification>();
+const mirroredNotifications = new Map<string, Notification>();
 
 ipcMain.handle(
   "notify",
@@ -295,6 +296,59 @@ ipcMain.handle(
 ipcMain.handle("close-notification", (_event, id: number) => {
   activeNotifications.get(id)?.close();
   activeNotifications.delete(id);
+});
+
+ipcMain.handle(
+  "show-mirrored-notification",
+  (
+    _event,
+    payload: { key: string; packageName: string; title: string; text?: string },
+  ) => {
+    if (!Notification.isSupported()) return;
+
+    // Kalau notification dengan key sama sudah ada,
+    // tutup dulu supaya dianggap update, bukan notif baru.
+    mirroredNotifications.get(payload.key)?.close();
+
+    const notification = new Notification({
+      title: payload.title || payload.packageName,
+      body: payload.text ?? "",
+      silent: false,
+      icon: nativeImage.createFromPath(getAppIconPath()),
+    });
+
+    notification.on("click", () => {
+      console.log("[notification] clicked:", payload.packageName, payload.key);
+
+      // Untuk checkpoint pertama:
+      // cukup munculkan Orbit dulu.
+      //
+      // Nanti checkpoint berikutnya bagian ini kita ubah
+      // jadi route ke desktop app / browser.
+      win?.show();
+
+      if (win?.isMinimized()) {
+        win.restore();
+      }
+
+      win?.focus();
+    });
+
+    notification.on("close", () => {
+      if (mirroredNotifications.get(payload.key) === notification) {
+        mirroredNotifications.delete(payload.key);
+      }
+    });
+
+    notification.show();
+
+    mirroredNotifications.set(payload.key, notification);
+  },
+);
+
+ipcMain.handle("close-mirrored-notification", (_event, key: string) => {
+  mirroredNotifications.get(key)?.close();
+  mirroredNotifications.delete(key);
 });
 
 // --- Expose system state untuk frontend ---
