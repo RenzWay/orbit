@@ -25,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
@@ -156,6 +157,7 @@ class MainActivity : ComponentActivity() {
                 var transferStatus by remember { mutableStateOf<TransferStatus?>(null) }
                 var currentTransferJob by remember { mutableStateOf<Job?>(null) }
                 val isInitialLoading by OrbitRuntime.isInitialLoading.collectAsState()
+                var showNotifAccessDialog by remember { mutableStateOf(false) }
 
                 pendingShareUrisState = { uris -> pendingShareUris = uris }
 
@@ -182,6 +184,9 @@ class MainActivity : ComponentActivity() {
                             if (!alreadyGranted) {
                                 notificationPermissionLauncher.launch(Manifest.permission.POST_NOTIFICATIONS)
                             }
+                        }
+                        if (!NotificationHelper.isNotificationListenerEnabled(context)) {
+                            showNotifAccessDialog = true
                         }
                     }
                 }
@@ -396,7 +401,7 @@ class MainActivity : ComponentActivity() {
                         is Screen.Home ->
                             HomeScreen(
                                 devices = otherDevices,
-                                isInitialLoading =isInitialLoading,
+                                isInitialLoading = isInitialLoading,
                                 isOrbitActive = isOrbitActive,
                                 onSendFile = { device ->
                                     pendingSendTarget = device
@@ -454,6 +459,30 @@ class MainActivity : ComponentActivity() {
                             Text(stringResource(R.string.undifiend_page))
                         }
                     }
+
+                    if (showNotifAccessDialog) {
+                        AlertDialog(
+                            onDismissRequest = { showNotifAccessDialog = false },
+                            title = { Text(stringResource(R.string.notification_mirror_title)) },
+                            text = { Text(stringResource(R.string.notification_access_not_granted)) },
+                            confirmButton = {
+                                TextButton(onClick = {
+                                    showNotifAccessDialog = false
+                                    NotificationHelper.openNotificationListenerSettings(context)
+                                }) {
+                                    Text(stringResource(R.string.btn_enable_notification_access))
+                                }
+                            },
+                            dismissButton = {
+                                TextButton(onClick = {
+                                    showNotifAccessDialog = false
+                                }) {
+                                    Text(stringResource(R.string.btn_cancel))
+                                }
+                            }
+                        )
+                    }
+
                     if (showClipboardModal) {
                         ClipboardModal(
                             clipboardText = clipboardText,
