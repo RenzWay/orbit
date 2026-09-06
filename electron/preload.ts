@@ -43,8 +43,44 @@ contextBridge.exposeInMainWorld("electronAPI", {
     title: string;
     text?: string;
     webUrl?: string;
+    actions?: { index: number; title: string; canReply: boolean }[];
   }) => ipcRenderer.invoke("show-mirrored-notification", payload),
 
   closeMirroredNotification: (key: string) =>
     ipcRenderer.invoke("close-mirrored-notification", key),
+
+  submitNotificationReply: (payload: {
+    key: string;
+    actionIndex: number;
+    text: string;
+  }) => ipcRenderer.invoke("submit-notification-reply", payload),
+
+  submitNotificationAction: (payload: { key: string; actionIndex: number }) =>
+    ipcRenderer.invoke("submit-notification-action", payload),
+
+  closeReplyWindow: () => ipcRenderer.invoke("close-reply-window"),
+
+  onNotificationReplyCommand: (
+    callback: (payload: { key: string; actionIndex: number; text: string }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: { key: string; actionIndex: number; text: string },
+    ) => callback(payload);
+    ipcRenderer.on("notification-reply-command", listener);
+
+    return () => ipcRenderer.removeListener("notification-reply-command", listener);
+  },
+
+  onNotificationActionCommand: (
+    callback: (payload: { key: string; actionIndex: number }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      payload: { key: string; actionIndex: number },
+    ) => callback(payload);
+    ipcRenderer.on("notification-action-command", listener);
+
+    return () => ipcRenderer.removeListener("notification-action-command", listener);
+  },
 });

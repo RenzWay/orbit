@@ -5,6 +5,13 @@ interface MirroredNotificationPayload {
   title: string;
   text?: string;
   webUrl?: string;
+  actions?: MirroredNotificationAction[];
+}
+
+interface MirroredNotificationAction {
+  index: number;
+  title: string;
+  canReply: boolean;
 }
 
 interface Window {
@@ -30,5 +37,30 @@ interface Window {
     ) => Promise<void>;
 
     closeMirroredNotification: (key: string) => Promise<void>;
+
+    submitNotificationReply: (payload: {
+      key: string;
+      actionIndex: number;
+      text: string;
+    }) => Promise<void>;
+
+    submitNotificationAction: (payload: {
+      key: string;
+      actionIndex: number;
+    }) => Promise<void>;
+
+    closeReplyWindow: () => Promise<void>;
+
+    onNotificationReplyCommand: (
+      callback: (payload: {
+        key: string;
+        actionIndex: number;
+        text: string;
+      }) => void,
+    ) => () => void;
+
+    onNotificationActionCommand: (
+      callback: (payload: { key: string; actionIndex: number }) => void,
+    ) => () => void;
   };
 }

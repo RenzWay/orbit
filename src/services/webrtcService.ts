@@ -64,6 +64,7 @@ import type {
   NegotiationState,
   WebRTCEventHandlers,
 } from "./webRtc/types";
+import { getNotificationTarget } from "../notification/NotificationRouter";
 
 export type { IncomingFileMeta } from "./webRtc/types";
 
@@ -519,6 +520,22 @@ class WebRTCService implements WebRTCEventHandlers {
     const appLabel = String(parsed.appLabel ?? "").trim() || packageName;
     const title = String(parsed.title ?? "");
     const text = String(parsed.text ?? "");
+    const webUrl = getNotificationTarget(packageName)?.webUrl;
+    const actions = Array.isArray(parsed.actions)
+      ? parsed.actions.flatMap((action): MirroredNotificationAction[] => {
+          if (!action || typeof action !== "object") return [];
+
+          const record = action as Record<string, unknown>;
+          const index = Number(record.index);
+          if (!Number.isInteger(index) || index < 0) return [];
+
+          return [{
+            index,
+            title: String(record.title ?? ""),
+            canReply: Boolean(record.canReply),
+          }];
+        })
+      : [];
 
     if (!key) return;
 
@@ -528,7 +545,34 @@ class WebRTCService implements WebRTCEventHandlers {
       appLabel,
       title,
       text,
+      webUrl,
+      actions,
     });
+  }
+
+  public sendNotificationReply(
+    key: string,
+    actionIndex: number,
+    text: string,
+  ): void {
+    if (!this.isConnected() || !text.trim()) return;
+
+    this.dataChannel?.send(
+      JSON.stringify({
+        type: "notification-reply",
+        key,
+        actionIndex,
+        text: text.trim(),
+      }),
+    );
+  }
+
+  public sendNotificationAction(key: string, actionIndex: number): void {
+    if (!this.isConnected()) return;
+
+    this.dataChannel?.send(
+      JSON.stringify({ type: "notification-action", key, actionIndex }),
+    );
   }
 
   private async handleNotificationRemoved(

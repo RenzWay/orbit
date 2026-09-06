@@ -221,6 +221,24 @@ export function useHomePageHandlers(userId: string) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [currentUser, deviceInfo, selectedDevice?.id, selectedDevice?.status]);
 
+  useEffect(() => {
+    const unsubscribeReply = window.electronAPI.onNotificationReplyCommand(
+      ({ key, actionIndex, text }) => {
+        webRTCService.sendNotificationReply(key, actionIndex, text);
+      },
+    );
+    const unsubscribeAction = window.electronAPI.onNotificationActionCommand(
+      ({ key, actionIndex }) => {
+        webRTCService.sendNotificationAction(key, actionIndex);
+      },
+    );
+
+    return () => {
+      unsubscribeReply();
+      unsubscribeAction();
+    };
+  }, []);
+
   const handleConnectP2P = () => {
     if (currentUser && deviceInfo && selectedDevice) {
       webRTCService.createOffer(
