@@ -40,7 +40,6 @@ import androidx.lifecycle.LifecycleEventObserver
 import com.renz.orbit.R
 import com.renz.orbit.notification.NotificationHelper
 import com.renz.orbit.service.OrbitConnectionService
-import com.renz.orbit.service.OrbitRuntime
 import com.renz.orbit.ui.components.AutoStartBtn
 import com.renz.orbit.ui.components.DialogLang
 import com.renz.orbit.ui.components.LanguageOption
@@ -187,6 +186,8 @@ fun SettingScreen(
                     isAutoStartEnabled = enabled
                     // 1. Simpan settingan Startup
                     pref.edit { putBoolean("auto_start", enabled) }
+                    OrbitConnectionService.stop(context)
+                    OrbitConnectionService.start(context)
 
                     // 2. Kalau dinyalain, sekalian minta izin Baterai (Popup)
                     if (enabled) {
@@ -208,19 +209,19 @@ fun SettingScreen(
 //
 //            Spacer(modifier = Modifier.height(16.dp))
 //
-//            // 2. Tombol Izin Baterai (Anti-Mati)
-//            AutoStartBtn(
-//                title = stringResource(R.string.setting_keep_alive_title),
-//                text = stringResource(R.string.setting_keep_alive_desc),
-//                isAutoStartEnabled = isBatteryIgnored,
-//                onAutoStartChange = { enabled ->
-//                    if (enabled) {
-//                        NotificationHelper.requestIgnoreBatteryOptimizations(context)
-//                    } else {
-//                        NotificationHelper.openBatteryOptimizationSettings(context)
-//                    }
-//                }
-//            )
+            // 2. Tombol Izin Baterai (Anti-Mati)
+            AutoStartBtn(
+                title = stringResource(R.string.setting_keep_alive_title),
+                text = stringResource(R.string.setting_keep_alive_desc),
+                isAutoStartEnabled = isBatteryIgnored,
+                onAutoStartChange = { enabled ->
+                    if (enabled) {
+                        NotificationHelper.requestIgnoreBatteryOptimizations(context)
+                    } else {
+                        NotificationHelper.openBatteryOptimizationSettings(context)
+                    }
+                }
+            )
 
             Spacer(modifier = Modifier.height(16.dp))
 

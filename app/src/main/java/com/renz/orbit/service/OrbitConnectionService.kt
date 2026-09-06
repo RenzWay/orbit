@@ -7,6 +7,7 @@ import android.content.Intent
 import android.content.pm.ServiceInfo
 import android.os.Build
 import android.os.IBinder
+import android.os.PowerManager
 import androidx.core.content.ContextCompat
 import com.google.firebase.auth.FirebaseAuth
 import com.renz.orbit.R
@@ -31,6 +32,8 @@ import java.util.Locale
  * ga bunyi ga getar, biar ga ganggu).
  */
 class OrbitConnectionService : Service() {
+    private var wakeLock: PowerManager.WakeLock? = null
+
     companion object {
         fun start(context: Context) {
             val intent = Intent(context, OrbitConnectionService::class.java)
@@ -47,7 +50,20 @@ class OrbitConnectionService : Service() {
         super.onCreate()
         OrbitRuntime.init(this)
 
+        val pref = getSharedPreferences("Settings", MODE_PRIVATE)
+        val isAlwaysOn = pref.getBoolean("auto_start", false)
+
         val notification = NotificationHelper.buildServiceNotification(this)
+
+        if (isAlwaysOn) {
+            val powerManager = getSystemService(Context.POWER_SERVICE) as PowerManager
+            wakeLock = powerManager.newWakeLock(
+                PowerManager.PARTIAL_WAKE_LOCK,
+                "Orbit::ConnectionKeepAlive"
+            ).apply {
+                acquire()
+            }
+        }
 
         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
             startForeground(
@@ -155,6 +171,10 @@ class OrbitConnectionService : Service() {
     }
 
     override fun onDestroy() {
+        wakeLock?.let {
+            if (it.isHeld) it.release()
+        }
+        wakeLock = null
         super.onDestroy()
     }
 
