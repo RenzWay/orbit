@@ -17,6 +17,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.launch
+import com.renz.orbit.notification.NotificationListener
 import org.json.JSONObject
 import org.webrtc.DataChannel
 import org.webrtc.IceCandidate
@@ -346,10 +347,41 @@ class WebRtcManager(private val context: Context) {
                 } else {
                     val text = String(bytes, Charsets.UTF_8)
                     Log.d(TAG, "Dapet data teks dari DataChannel: $text")
-                    onDataReceived?.invoke(text)
+
+                    if (!tryHandleNotificationCommand(text)) {
+                        onDataReceived?.invoke(text)
+                    }
                 }
             }
         })
+    }
+
+    private fun tryHandleNotificationCommand(text: String): Boolean {
+        val json = runCatching { JSONObject(text) }.getOrNull() ?: return false
+        val type = json.optString("type")
+        if (type != "notification-reply" && type != "notification-action") return false
+
+        val key = json.optString("key")
+        val actionIndex = json.optInt("actionIndex", 0)
+        if (key.isEmpty()) return true
+
+        val listener = NotificationListener.getInstance()
+        if (listener == null) {
+            Log.w(TAG, "NotificationListener belum konek, gabisa proses $type")
+            return true
+        }
+
+        when (type) {
+            "notification-reply" -> {
+                val replyText = json.optString("text")
+                listener.sendReply(key, actionIndex, replyText)
+            }
+
+            "notification-action" -> {
+                listener.performAction(key, actionIndex)
+            }
+        }
+        return true
     }
 
     fun sendData(text: String) {
