@@ -64,7 +64,6 @@ import type {
   NegotiationState,
   WebRTCEventHandlers,
 } from "./webRtc/types";
-import { getNotificationTarget } from "../notification/NotificationRouter";
 
 export type { IncomingFileMeta } from "./webRtc/types";
 
@@ -520,7 +519,6 @@ class WebRTCService implements WebRTCEventHandlers {
     const appLabel = String(parsed.appLabel ?? "").trim() || packageName;
     const title = String(parsed.title ?? "");
     const text = String(parsed.text ?? "");
-    const webUrl = getNotificationTarget(packageName)?.webUrl;
     const actions = Array.isArray(parsed.actions)
       ? parsed.actions.flatMap((action): MirroredNotificationAction[] => {
           if (!action || typeof action !== "object") return [];
@@ -545,7 +543,6 @@ class WebRTCService implements WebRTCEventHandlers {
       appLabel,
       title,
       text,
-      webUrl,
       actions,
     });
   }

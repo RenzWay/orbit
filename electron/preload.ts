@@ -42,23 +42,11 @@ contextBridge.exposeInMainWorld("electronAPI", {
     appLabel: string;
     title: string;
     text?: string;
-    webUrl?: string;
     actions?: { index: number; title: string; canReply: boolean }[];
   }) => ipcRenderer.invoke("show-mirrored-notification", payload),
 
   closeMirroredNotification: (key: string) =>
     ipcRenderer.invoke("close-mirrored-notification", key),
-
-  submitNotificationReply: (payload: {
-    key: string;
-    actionIndex: number;
-    text: string;
-  }) => ipcRenderer.invoke("submit-notification-reply", payload),
-
-  submitNotificationAction: (payload: { key: string; actionIndex: number }) =>
-    ipcRenderer.invoke("submit-notification-action", payload),
-
-  closeReplyWindow: () => ipcRenderer.invoke("close-reply-window"),
 
   onNotificationReplyCommand: (
     callback: (payload: { key: string; actionIndex: number; text: string }) => void,

@@ -4,7 +4,6 @@ interface MirroredNotificationPayload {
   appLabel: string;
   title: string;
   text?: string;
-  webUrl?: string;
   actions?: MirroredNotificationAction[];
 }
 
@@ -37,19 +36,6 @@ interface Window {
     ) => Promise<void>;
 
     closeMirroredNotification: (key: string) => Promise<void>;
-
-    submitNotificationReply: (payload: {
-      key: string;
-      actionIndex: number;
-      text: string;
-    }) => Promise<void>;
-
-    submitNotificationAction: (payload: {
-      key: string;
-      actionIndex: number;
-    }) => Promise<void>;
-
-    closeReplyWindow: () => Promise<void>;
 
     onNotificationReplyCommand: (
       callback: (payload: {

@@ -7,7 +7,6 @@ import {
   nativeImage,
   Notification,
   powerMonitor,
-  shell,
   Tray,
 } from "electron";
 import path from "node:path";
@@ -255,128 +254,13 @@ ipcMain.handle("get-device-info", () => {
 const activeNotifications = new Map<number, Notification>();
 const mirroredNotifications = new Map<string, Notification>();
 
-interface MirroredNotificationAction {
-  index: number;
-  title: string;
-  canReply: boolean;
-}
-
 interface MirroredNotificationMeta {
-  appLabel: string;
-  title: string;
-  webUrl?: string;
-  actions: MirroredNotificationAction[];
+  replyActionIndex?: number;
+  actionIndexMap: number[];
+  dispatched: boolean;
 }
 
 const mirroredNotificationMeta = new Map<string, MirroredNotificationMeta>();
-let replyWin: BrowserWindow | null = null;
-
-function escapeHtml(value: string): string {
-  return value
-    .replace(/&/g, "&amp;")
-    .replace(/</g, "&lt;")
-    .replace(/>/g, "&gt;")
-    .replace(/"/g, "&quot;")
-    .replace(/'/g, "&#039;");
-}
-
-function serializeForScript(value: unknown): string {
-  return (JSON.stringify(value) ?? "null")
-    .replace(/</g, "\\u003c")
-    .replace(/>/g, "\\u003e")
-    .replace(/&/g, "\\u0026")
-    .replace(/\u2028/g, "\\u2028")
-    .replace(/\u2029/g, "\\u2029");
-}
-
-function buildReplyWindowHtml(key: string, meta: MirroredNotificationMeta): string {
-  const replyAction = meta.actions.find((action) => action.canReply);
-  const actions = meta.actions.filter((action) => !action.canReply);
-  const actionButtons = actions
-    .map(
-      (action) =>
-        `<button class="action" data-action-index="${action.index}">${escapeHtml(action.title)}</button>`,
-    )
-    .join("");
-  const title = `${meta.appLabel}${meta.title ? `: ${meta.title}` : ""}`;
-
-  return `<!doctype html>
-<html lang="id">
-<head>
-<meta charset="utf-8">
-<style>
-  * { box-sizing: border-box; }
-  body { margin: 0; background: #1d1f23; color: #f5f5f5; font-family: Arial, sans-serif; }
-  main { padding: 16px; }
-  h1 { margin: 0 0 12px; font-size: 14px; font-weight: 600; }
-  textarea { width: 100%; resize: vertical; min-height: 64px; border: 1px solid #50545d; border-radius: 6px; padding: 8px; background: #282b31; color: inherit; font: inherit; }
-  .row { display: flex; gap: 8px; margin-top: 8px; }
-  button { border: 0; border-radius: 6px; padding: 8px 12px; color: inherit; cursor: pointer; font: inherit; }
-  #send { flex: 1; background: #2979ff; }
-  #cancel { background: transparent; color: #b6bac3; }
-  .action { display: block; width: 100%; margin-top: 8px; background: #353940; text-align: left; }
-</style>
-</head>
-<body>
-<main>
-  <h1>${escapeHtml(title)}</h1>
-  ${
-    replyAction
-      ? `<textarea id="reply" aria-label="Balasan" autofocus></textarea>
-         <div class="row"><button id="send">Kirim</button><button id="cancel">Batal</button></div>`
-      : '<div class="row"><button id="cancel">Batal</button></div>'
-  }
-  ${actionButtons}
-</main>
-<script>
-  const key = ${serializeForScript(key)};
-  const replyActionIndex = ${replyAction?.index ?? "null"};
-  document.getElementById("cancel").addEventListener("click", () => window.electronAPI.closeReplyWindow());
-  document.getElementById("send")?.addEventListener("click", () => {
-    const text = document.getElementById("reply").value.trim();
-    if (text) window.electronAPI.submitNotificationReply({ key, actionIndex: replyActionIndex, text });
-  });
-  document.getElementById("reply")?.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" && !event.shiftKey) {
-      event.preventDefault();
-      document.getElementById("send").click();
-    }
-  });
-  document.querySelectorAll(".action").forEach((button) => {
-    button.addEventListener("click", () => window.electronAPI.submitNotificationAction({
-      key,
-      actionIndex: Number(button.dataset.actionIndex),
-    }));
-  });
-</script>
-</body>
-</html>`;
-}
-
-function openReplyWindow(key: string, meta: MirroredNotificationMeta) {
-  replyWin?.close();
-  const replyWindow = new BrowserWindow({
-    width: 380,
-    height: Math.min(360, 112 + meta.actions.length * 42),
-    frame: false,
-    resizable: false,
-    alwaysOnTop: true,
-    skipTaskbar: true,
-    webPreferences: {
-      preload: path.join(__dirname, "preload.mjs"),
-      nodeIntegration: false,
-      contextIsolation: true,
-    },
-  });
-  replyWindow.loadURL(
-    `data:text/html;charset=utf-8,${encodeURIComponent(buildReplyWindowHtml(key, meta))}`,
-  );
-  replyWindow.on("blur", () => replyWindow.close());
-  replyWindow.on("closed", () => {
-    if (replyWin === replyWindow) replyWin = null;
-  });
-  replyWin = replyWindow;
-}
 
 ipcMain.handle(
   "notify",
@@ -432,8 +316,7 @@ ipcMain.handle(
       appLabel: string;
       title: string;
       text?: string;
-      webUrl?: string;
-      actions?: MirroredNotificationAction[];
+      actions?: { index: number; title: string; canReply: boolean }[];
     },
   ) => {
     if (!Notification.isSupported()) return;
@@ -441,10 +324,12 @@ ipcMain.handle(
     // Kalau notification dengan key sama sudah ada,
     // tutup dulu supaya dianggap update, bukan notif baru.
     mirroredNotifications.get(payload.key)?.close();
-    const actions = (payload.actions ?? []).filter(
+    const androidActions = (payload.actions ?? []).filter(
       (action) =>
         Number.isInteger(action.index) && action.index >= 0 && !!action.title,
     );
+    const replyAction = androidActions.find((action) => action.canReply);
+    const plainActions = androidActions.filter((action) => !action.canReply);
 
     const title = payload.title
       ? `${payload.appLabel}: ${payload.title}`
@@ -455,28 +340,54 @@ ipcMain.handle(
       body: payload.text ?? "",
       silent: false,
       icon: nativeImage.createFromPath(getAppIconPath()),
+      hasReply: Boolean(replyAction),
+      replyPlaceholder: replyAction?.title || undefined,
+      actions: plainActions.map((action) => ({
+        type: "button",
+        text: action.title,
+      })),
     });
 
     mirroredNotificationMeta.set(payload.key, {
-      appLabel: payload.appLabel,
-      title: payload.title,
-      webUrl: payload.webUrl,
-      actions,
+      replyActionIndex: replyAction?.index,
+      actionIndexMap: plainActions.map((action) => action.index),
+      dispatched: false,
+    });
+
+    notification.on("reply", (_event, replyText) => {
+      const meta = mirroredNotificationMeta.get(payload.key);
+      const text = replyText.trim();
+      if (
+        !meta ||
+        meta.dispatched ||
+        meta.replyActionIndex === undefined ||
+        !text
+      ) {
+        return;
+      }
+      meta.dispatched = true;
+
+      win?.webContents.send("notification-reply-command", {
+        key: payload.key,
+        actionIndex: meta.replyActionIndex,
+        text,
+      });
+    });
+
+    notification.on("action", (details) => {
+      const meta = mirroredNotificationMeta.get(payload.key);
+      const actionIndex = meta?.actionIndexMap[details.actionIndex];
+      if (!meta || meta.dispatched || actionIndex === undefined) return;
+      meta.dispatched = true;
+
+      win?.webContents.send("notification-action-command", {
+        key: payload.key,
+        actionIndex,
+      });
     });
 
     notification.on("click", () => {
       console.log("[notification] clicked:", payload.packageName, payload.key);
-
-      const meta = mirroredNotificationMeta.get(payload.key);
-      if (meta?.actions.length) {
-        openReplyWindow(payload.key, meta);
-        return;
-      }
-
-      if (payload.webUrl) {
-        void shell.openExternal(payload.webUrl);
-        return;
-      }
 
       win?.show();
 
@@ -504,45 +415,6 @@ ipcMain.handle("close-mirrored-notification", (_event, key: string) => {
   mirroredNotifications.get(key)?.close();
   mirroredNotifications.delete(key);
   mirroredNotificationMeta.delete(key);
-});
-
-ipcMain.handle(
-  "submit-notification-reply",
-  (_event, payload: { key: string; actionIndex: number; text: string }) => {
-    if (
-      typeof payload?.key !== "string" ||
-      !Number.isInteger(payload.actionIndex) ||
-      typeof payload.text !== "string" ||
-      !payload.text.trim()
-    ) {
-      throw new Error("Invalid notification reply");
-    }
-
-    win?.webContents.send("notification-reply-command", {
-      ...payload,
-      text: payload.text.trim(),
-    });
-    replyWin?.close();
-  },
-);
-
-ipcMain.handle(
-  "submit-notification-action",
-  (_event, payload: { key: string; actionIndex: number }) => {
-    if (
-      typeof payload?.key !== "string" ||
-      !Number.isInteger(payload.actionIndex)
-    ) {
-      throw new Error("Invalid notification action");
-    }
-
-    win?.webContents.send("notification-action-command", payload);
-    replyWin?.close();
-  },
-);
-
-ipcMain.handle("close-reply-window", () => {
-  replyWin?.close();
 });
 
 // --- Expose system state untuk frontend ---
