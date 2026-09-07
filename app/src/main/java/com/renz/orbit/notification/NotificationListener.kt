@@ -14,9 +14,9 @@ import org.json.JSONObject
 class NotificationListener : NotificationListenerService() {
 
     private val notifications = mutableMapOf<
-        String,
-        StatusBarNotification
-    >()
+            String,
+            StatusBarNotification
+            >()
 
     companion object {
         private const val TAG = "NotificationListener"
@@ -50,7 +50,10 @@ class NotificationListener : NotificationListenerService() {
         val action = findAction(key, actionIndex) ?: return
         val remoteInputs = action.remoteInputs
         if (remoteInputs.isNullOrEmpty()) {
-            Log.w(TAG, "Action index $actionIndex di key=$key gak punya remoteInput, gabisa dibales sebagai teks")
+            Log.w(
+                TAG,
+                "Action index $actionIndex di key=$key gak punya remoteInput, gabisa dibales sebagai teks"
+            )
             return
         }
 
