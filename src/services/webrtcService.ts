@@ -527,11 +527,13 @@ class WebRTCService implements WebRTCEventHandlers {
           const index = Number(record.index);
           if (!Number.isInteger(index) || index < 0) return [];
 
-          return [{
-            index,
-            title: String(record.title ?? ""),
-            canReply: Boolean(record.canReply),
-          }];
+          return [
+            {
+              index,
+              title: String(record.title ?? ""),
+              canReply: Boolean(record.canReply),
+            },
+          ];
         })
       : [];
 
@@ -552,16 +554,32 @@ class WebRTCService implements WebRTCEventHandlers {
     actionIndex: number,
     text: string,
   ): void {
-    if (!this.isConnected() || !text.trim()) return;
+    const trimmedText = text.trim();
+    if (!this.isConnected()) {
+      console.warn(
+        "[notification] reply tidak terkirim: DataChannel belum open",
+      );
+      return;
+    }
+    if (!trimmedText) {
+      console.warn("[notification] reply tidak terkirim: teks kosong");
+      return;
+    }
 
-    this.dataChannel?.send(
-      JSON.stringify({
-        type: "notification-reply",
-        key,
-        actionIndex,
-        text: text.trim(),
-      }),
-    );
+    try {
+      this.dataChannel?.send(
+        JSON.stringify({
+          type: "notification-reply",
+          key,
+          actionIndex,
+          text: trimmedText,
+        }),
+      );
+      console.log("[notification] reply terkirim:", key, actionIndex);
+    } catch (error) {
+      console.error("[notification] reply gagal dikirim:", error);
+      this.onError?.("Reply notifikasi gagal dikirim.");
+    }
   }
 
   public sendNotificationAction(key: string, actionIndex: number): void {

@@ -354,9 +354,14 @@ ipcMain.handle(
       dispatched: false,
     });
 
-    notification.on("reply", (_event, replyText) => {
+    notification.on("reply", (event, legacyReplyText) => {
       const meta = mirroredNotificationMeta.get(payload.key);
+      const replyText =
+        (event as Electron.Event & { reply?: string }).reply ??
+        legacyReplyText ??
+        "";
       const text = replyText.trim();
+      console.log("[notification] reply:", payload.key, text);
       if (
         !meta ||
         meta.dispatched ||
@@ -372,6 +377,10 @@ ipcMain.handle(
         actionIndex: meta.replyActionIndex,
         text,
       });
+    });
+
+    notification.on("failed", (_event, error) => {
+      console.error("[notification] failed:", payload.key, error);
     });
 
     notification.on("action", (details) => {
