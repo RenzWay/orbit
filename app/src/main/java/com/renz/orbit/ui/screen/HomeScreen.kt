@@ -146,7 +146,7 @@ fun HomeScreen(
                             )
                         }
                     } else {
-                        items(sortedDevices) { device ->
+                        items(sortedDevices, key = { it.id }) { device ->
                             DeviceCard(
                                 deviceName = device.deviceName,
                                 status = device.status,
@@ -161,8 +161,8 @@ fun HomeScreen(
                                     }
                                     onUnsyncDevice(device)
                                 },
-
-                                platform = device.platform
+                                platform = device.platform,
+                                modifier = Modifier.animateItem()
                             )
                         }
                     }

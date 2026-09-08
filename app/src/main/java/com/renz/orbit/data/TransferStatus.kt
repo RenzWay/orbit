@@ -5,3 +5,11 @@ data class TransferStatus(
     val progress: Float,
     val isSending: Boolean
 )
+
+data class IncomingTransferStatus(
+    val fileName: String,
+    val totalSize: Long,
+    val bytesReceived: Long = 0L,
+    val notificationId: Int,
+    val percent: Int = 0
+)

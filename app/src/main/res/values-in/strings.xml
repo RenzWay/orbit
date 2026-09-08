@@ -103,6 +103,7 @@
     <string name="msg_login_success">Login Berhasil!</string>
     <string name="msg_login_failed">Login gagal: %1$s</string>
     <string name="title_upload_to_device">Upload ke perangkat?</string>
+    <string name="msg_send_files_to">Mengirim %1$d file ke:</string>
     <string name="msg_no_online_devices">Tidak ada perangkat yang online sekarang. Buka Orbit di perangkat tujuan dulu.</string>
     <string name="btn_cancel">Batal</string>
 

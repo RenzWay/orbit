@@ -1,82 +1,49 @@
 package com.renz.orbit
 
 import android.Manifest
-import android.content.ClipData
 import android.content.ClipboardManager
-import android.content.ContentValues
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.os.Build
 import android.os.Bundle
-import android.os.Environment
-import android.provider.MediaStore
 import android.util.Log
 import android.widget.Toast
 import androidx.activity.ComponentActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.compose.setContent
 import androidx.activity.result.contract.ActivityResultContracts
-import androidx.compose.foundation.clickable
 import androidx.compose.foundation.isSystemInDarkTheme
-import androidx.compose.foundation.layout.Column
-import androidx.compose.foundation.layout.fillMaxWidth
-import androidx.compose.foundation.layout.padding
-import androidx.compose.material3.AlertDialog
-import androidx.compose.material3.Surface
 import androidx.compose.material3.Text
-import androidx.compose.material3.TextButton
-import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.collectAsState
 import androidx.compose.runtime.getValue
-import androidx.compose.runtime.mutableIntStateOf
-import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberCoroutineScope
-import androidx.compose.runtime.saveable.Saver
-import androidx.compose.runtime.saveable.rememberSaveable
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.stringResource
-import androidx.compose.ui.unit.dp
 import androidx.core.content.ContextCompat
 import androidx.core.splashscreen.SplashScreen.Companion.installSplashScreen
-import com.google.firebase.auth.FirebaseAuth
-import com.renz.orbit.data.TransferStatus
+import androidx.lifecycle.viewmodel.compose.viewModel
 import com.renz.orbit.notification.NotificationHelper
 import com.renz.orbit.service.AuthManager
-import com.renz.orbit.service.Device
 import com.renz.orbit.service.OrbitConnectionService
 import com.renz.orbit.service.OrbitRuntime
-import com.renz.orbit.service.TransferManager
 import com.renz.orbit.ui.components.ClipboardModal
+import com.renz.orbit.ui.components.NotificationAccessDialog
+import com.renz.orbit.ui.components.ShareSheetDialog
 import com.renz.orbit.ui.navigation.Screen
 import com.renz.orbit.ui.screen.HomeScreen
 import com.renz.orbit.ui.screen.LoginPage
 import com.renz.orbit.ui.screen.ProfileScreen
 import com.renz.orbit.ui.screen.SettingScreen
 import com.renz.orbit.ui.theme.OrbitTheme
-import kotlinx.coroutines.Job
+import com.renz.orbit.ui.viewmodel.MainViewModel
 import kotlinx.coroutines.launch
-import org.json.JSONObject
-import java.io.File
-import java.io.FileOutputStream
-import java.io.OutputStream
 import java.util.Locale
-
-val ScreenSaver = Saver<Screen, String>(
-    save = { it.route },
-    restore = { route ->
-        when (route) {
-            "setting" -> Screen.Setting
-            "profile" -> Screen.Profile
-            else -> Screen.Home
-        }
-    }
-)
 
 class MainActivity : ComponentActivity() {
     private lateinit var authManager: AuthManager
@@ -109,7 +76,6 @@ class MainActivity : ComponentActivity() {
         }
     }
 
-
     override fun onCreate(savedInstanceState: Bundle?) {
         installSplashScreen()
         super.onCreate(savedInstanceState)
@@ -122,60 +88,36 @@ class MainActivity : ComponentActivity() {
         handleIntent(intent)
 
         setContent {
-            val prefSetting = getSharedPreferences("Settings", MODE_PRIVATE)
-            var themeSetting by remember {
-                mutableStateOf(prefSetting.getString("theme", "system") ?: "system")
-            }
+            val viewModel: MainViewModel = viewModel()
 
-            val isdark = when (themeSetting) {
+            val isdark = when (viewModel.themeSetting) {
                 "dark" -> true
                 "light" -> false
                 else -> isSystemInDarkTheme()
             }
 
+            // Sync initial share URIs with ViewModel
+            LaunchedEffect(initialShareUris) {
+                if (initialShareUris.isNotEmpty()) {
+                    viewModel.pendingShareUris = initialShareUris
+                }
+            }
+
             OrbitTheme(darkTheme = isdark) {
                 val context = LocalContext.current
                 val scope = rememberCoroutineScope()
-                var currentUser by remember { mutableStateOf(FirebaseAuth.getInstance().currentUser) }
                 val otherDevices by OrbitRuntime.devices.collectAsState()
-                var showClipboardModal by remember { mutableStateOf(false) }
-                var clipboardText by remember { mutableStateOf("") }
-                var clipboardTargetDevice by remember { mutableStateOf<Device?>(null) }
-                var currentDownloadName by remember { mutableStateOf<String?>(null) }
-                var currentOutputStream by remember { mutableStateOf<OutputStream?>(null) }
-                var currentDownloadTotalSize by remember { mutableLongStateOf(0L) }
-                var currentDownloadBytesReceived by remember { mutableLongStateOf(0L) }
-                var currentDownloadNotifId by remember { mutableIntStateOf(0) }
-                var lastReportedPercent by remember { mutableIntStateOf(-1) }
-                var pendingSendTarget by remember { mutableStateOf<Device?>(null) }
-                var pendingShareUris by remember { mutableStateOf(initialShareUris) }
-                var currentScreen by rememberSaveable(stateSaver = ScreenSaver) {
-                    mutableStateOf<Screen>(
-                        Screen.Home
-                    )
-                }
-                var transferStatus by remember { mutableStateOf<TransferStatus?>(null) }
-                var currentTransferJob by remember { mutableStateOf<Job?>(null) }
                 val isInitialLoading by OrbitRuntime.isInitialLoading.collectAsState()
-                var showNotifAccessDialog by remember { mutableStateOf(false) }
 
-                pendingShareUrisState = { uris -> pendingShareUris = uris }
+                pendingShareUrisState = { uris -> viewModel.pendingShareUris = uris }
 
-                DisposableEffect(Unit) {
-                    val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
-                        currentUser = firebaseAuth.currentUser
-                    }
-                    FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
-                    onDispose {
-                        FirebaseAuth.getInstance().removeAuthStateListener(authStateListener)
-                    }
-                }
                 val notificationPermissionLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.RequestPermission()
                 ) { }
 
-                LaunchedEffect(currentUser) {
-                    if (currentUser != null) {
+                LaunchedEffect(viewModel.currentUser) {
+                    val user = viewModel.currentUser
+                    if (user != null) {
                         OrbitConnectionService.start(context)
                         if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
                             val alreadyGranted = ContextCompat.checkSelfPermission(
@@ -186,171 +128,7 @@ class MainActivity : ComponentActivity() {
                             }
                         }
                         if (!NotificationHelper.isNotificationListenerEnabled(context)) {
-                            showNotifAccessDialog = true
-                        }
-                    }
-                }
-
-                LaunchedEffect(Unit) {
-                    val webRtcManager = OrbitRuntime.webRtcManager
-                    webRtcManager.onDataReceived = { textData: String ->
-                        scope.launch {
-                            try {
-                                val json = JSONObject(textData)
-                                when (json.getString("type")) {
-                                    "clipboard" -> {
-                                        val payload = json.getString("payload")
-                                        val clipboard =
-                                            getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
-                                        val clip = ClipData.newPlainText("Orbit clipboard", payload)
-                                        clipboard.setPrimaryClip(clip)
-                                        Toast.makeText(
-                                            context,
-                                            getString(R.string.msg_clipboard_synced),
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-
-                                    "file-meta" -> {
-                                        val fileName = json.getString("name")
-                                        val fileSize = json.optLong("size", 0L)
-                                        currentDownloadTotalSize = fileSize
-                                        currentDownloadBytesReceived = 0L
-                                        lastReportedPercent = -1
-                                        currentDownloadNotifId = NotificationHelper.newTransferId()
-                                        try {
-                                            transferStatus = TransferStatus(fileName, 0f, false)
-                                            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q) {
-                                                val values = ContentValues().apply {
-                                                    put(
-                                                        MediaStore.MediaColumns.DISPLAY_NAME,
-                                                        fileName
-                                                    )
-                                                    put(
-                                                        MediaStore.MediaColumns.RELATIVE_PATH,
-                                                        Environment.DIRECTORY_DOWNLOADS
-                                                    )
-                                                }
-                                                val fileUri = context.contentResolver.insert(
-                                                    MediaStore.Downloads.EXTERNAL_CONTENT_URI,
-                                                    values
-                                                )
-                                                currentOutputStream = fileUri?.let {
-                                                    context.contentResolver.openOutputStream(it)
-                                                }
-                                            } else {
-                                                @Suppress("DEPRECATION")
-                                                val downloadDir =
-                                                    Environment.getExternalStoragePublicDirectory(
-                                                        Environment.DIRECTORY_DOWNLOADS
-                                                    )
-                                                val file = File(downloadDir, fileName)
-                                                currentOutputStream = FileOutputStream(file)
-                                            }
-                                            currentDownloadName = fileName
-                                            NotificationHelper.showTransferProgress(
-                                                context,
-                                                currentDownloadNotifId,
-                                                fileName,
-                                                0,
-                                                false
-                                            )
-                                        } catch (e: Exception) {
-                                            Log.e(
-                                                "MainActivity",
-                                                "Gagal siapkan download: ${e.message}"
-                                            )
-                                            NotificationHelper.showTransferResult(
-                                                context,
-                                                currentDownloadNotifId,
-                                                fileName,
-                                                isSending = false,
-                                                success = false,
-                                                errorMessage = getString(
-                                                    R.string.msg_download_prepared_failed,
-                                                    e.message
-                                                )
-                                            )
-                                        }
-                                    }
-
-                                    "file-complete" -> {
-                                        val fileName = currentDownloadName ?: "file"
-                                        try {
-                                            currentOutputStream?.flush()
-                                            currentOutputStream?.close()
-                                            currentOutputStream = null
-                                            NotificationHelper.showTransferResult(
-                                                context,
-                                                currentDownloadNotifId,
-                                                fileName,
-                                                isSending = false,
-                                                success = true
-                                            )
-                                            transferStatus = null
-                                        } catch (e: Exception) {
-                                            Log.e(
-                                                "MainActivity",
-                                                "Gagal finalisasi file: ${e.message}"
-                                            )
-                                            NotificationHelper.showTransferResult(
-                                                context,
-                                                currentDownloadNotifId,
-                                                fileName,
-                                                isSending = false,
-                                                success = false,
-                                                errorMessage = e.message
-                                            )
-                                        }
-                                        currentDownloadName = null
-                                    }
-
-                                    "file-cancel" -> {
-                                        currentOutputStream = null
-                                        transferStatus = null
-                                        currentDownloadName = null
-                                        NotificationHelper.cancel(context, currentDownloadNotifId)
-                                        Toast.makeText(
-                                            context,
-                                            getString(R.string.msg_transfer_cancelled),
-                                            Toast.LENGTH_SHORT
-                                        ).show()
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Error parsing data: ${e.message}")
-                            }
-                        }
-                    }
-
-                    webRtcManager.onBinaryReceived = { bytes ->
-                        scope.launch {
-                            try {
-                                currentOutputStream?.write(bytes)
-                                currentDownloadBytesReceived += bytes.size
-                                if (currentDownloadTotalSize > 0) {
-                                    val percent =
-                                        ((currentDownloadBytesReceived * 100) / currentDownloadTotalSize).toInt()
-                                            .coerceIn(0, 100)
-                                    if (percent != lastReportedPercent) {
-                                        lastReportedPercent = percent
-                                        NotificationHelper.showTransferProgress(
-                                            context,
-                                            currentDownloadNotifId,
-                                            currentDownloadName ?: "file",
-                                            percent,
-                                            false
-                                        )
-                                        transferStatus = TransferStatus(
-                                            currentDownloadName ?: "file",
-                                            percent / 100f,
-                                            false
-                                        )
-                                    }
-                                }
-                            } catch (e: Exception) {
-                                Log.e("MainActivity", "Gagal tulis file: ${e.message}")
-                            }
+                            viewModel.showNotifAccessDialog = true
                         }
                     }
                 }
@@ -358,16 +136,9 @@ class MainActivity : ComponentActivity() {
                 val filePickerLauncher = rememberLauncherForActivityResult(
                     contract = ActivityResultContracts.GetContent()
                 ) { uri: Uri? ->
-                    val targetDevice = pendingSendTarget
-                    if (uri == null || targetDevice == null) return@rememberLauncherForActivityResult
-                    currentTransferJob = scope.launch {
-                        TransferManager.sendFilesToDevice(
-                            context,
-                            targetDevice,
-                            listOf(uri),
-                            onProgress = { transferStatus = it }
-                        )
-                        currentTransferJob = null
+                    val targetDevice = viewModel.pendingSendTarget
+                    if (uri != null && targetDevice != null) {
+                        viewModel.sendFiles(targetDevice, listOf(uri))
                     }
                 }
 
@@ -380,8 +151,7 @@ class MainActivity : ComponentActivity() {
                                     context,
                                     getString(R.string.msg_login_success),
                                     Toast.LENGTH_SHORT
-                                )
-                                    .show()
+                                ).show()
                             } catch (e: Exception) {
                                 Log.e("MainActivity", "Login Google gagal: ${e.message}")
                                 Toast.makeText(
@@ -394,28 +164,30 @@ class MainActivity : ComponentActivity() {
                     }
 
                 val isOrbitActive = otherDevices.any { it.status.lowercase() == "online" }
-                if (currentUser == null) {
+
+                if (viewModel.currentUser == null) {
                     LoginPage(onLoginClick = { googleSignInLauncher.launch(authManager.getGoogleSignInClient().signInIntent) })
                 } else {
-                    when (currentScreen) {
+                    when (viewModel.currentScreen) {
                         is Screen.Home ->
                             HomeScreen(
                                 devices = otherDevices,
                                 isInitialLoading = isInitialLoading,
                                 isOrbitActive = isOrbitActive,
                                 onSendFile = { device ->
-                                    pendingSendTarget = device
+                                    viewModel.pendingSendTarget = device
                                     filePickerLauncher.launch("*/*")
                                 },
                                 onSyncClipboard = { device ->
-                                    clipboardTargetDevice = device
+                                    viewModel.clipboardTargetDevice = device
                                     val clipboard =
                                         getSystemService(CLIPBOARD_SERVICE) as ClipboardManager
                                     val clipData = clipboard.primaryClip
                                     if (clipData != null && clipData.itemCount > 0) {
-                                        clipboardText = clipData.getItemAt(0).text?.toString() ?: ""
+                                        viewModel.clipboardText =
+                                            clipData.getItemAt(0).text?.toString() ?: ""
                                     }
-                                    showClipboardModal = true
+                                    viewModel.showClipboardModal = true
                                 },
                                 onUnsyncDevice = { device ->
                                     OrbitRuntime.orbitPresence.removeDevice(device.id)
@@ -424,35 +196,21 @@ class MainActivity : ComponentActivity() {
                                         OrbitRuntime.setActiveConnection(null)
                                     }
                                 },
-                                onAccountClick = {
-                                    currentScreen = Screen.Profile
-                                },
-                                onSettingClick = {
-                                    currentScreen = Screen.Setting
-                                },
-                                onCancelTransfer = {
-                                    currentTransferJob?.cancel()
-                                    currentTransferJob = null
-                                    transferStatus = null
-
-                                    scope.launch {
-                                        val cancelMsg = org.json.JSONObject()
-                                            .apply { put("type", "file-cancel") }
-                                        OrbitRuntime.webRtcManager.sendData(cancelMsg.toString())
-                                    }
-                                },
-                                transferStatus = transferStatus,
+                                onAccountClick = { viewModel.currentScreen = Screen.Profile },
+                                onSettingClick = { viewModel.currentScreen = Screen.Setting },
+                                onCancelTransfer = { viewModel.cancelTransfer() },
+                                transferStatus = viewModel.transferStatus,
                                 modifier = Modifier
                             )
 
                         is Screen.Setting -> {
                             SettingScreen(
-                                onBack = { currentScreen = Screen.Home },
-                                onThemeChange = { newTheme -> themeSetting = newTheme })
+                                onBack = { viewModel.currentScreen = Screen.Home },
+                                onThemeChange = { newTheme -> viewModel.updateTheme(newTheme) })
                         }
 
                         is Screen.Profile -> {
-                            ProfileScreen(onBack = { currentScreen = Screen.Home })
+                            ProfileScreen(onBack = { viewModel.currentScreen = Screen.Home })
                         }
 
                         else -> {
@@ -460,96 +218,41 @@ class MainActivity : ComponentActivity() {
                         }
                     }
 
-                    if (showNotifAccessDialog) {
-                        AlertDialog(
-                            onDismissRequest = { showNotifAccessDialog = false },
-                            title = { Text(stringResource(R.string.notification_mirror_title)) },
-                            text = { Text(stringResource(R.string.notification_access_not_granted)) },
-                            confirmButton = {
-                                TextButton(onClick = {
-                                    showNotifAccessDialog = false
-                                    NotificationHelper.openNotificationListenerSettings(context)
-                                }) {
-                                    Text(stringResource(R.string.btn_enable_notification_access))
-                                }
-                            },
-                            dismissButton = {
-                                TextButton(onClick = {
-                                    showNotifAccessDialog = false
-                                }) {
-                                    Text(stringResource(R.string.btn_cancel))
-                                }
+                    if (viewModel.showNotifAccessDialog) {
+                        NotificationAccessDialog(
+                            onDismiss = { viewModel.showNotifAccessDialog = false },
+                            onConfirm = {
+                                viewModel.showNotifAccessDialog = false
+                                NotificationHelper.openNotificationListenerSettings(context)
                             }
                         )
                     }
 
-                    if (showClipboardModal) {
+                    if (viewModel.showClipboardModal) {
                         ClipboardModal(
-                            clipboardText = clipboardText,
-                            onTextChange = { clipboardText = it },
+                            clipboardText = viewModel.clipboardText,
+                            onTextChange = { viewModel.clipboardText = it },
                             onSend = {
-                                val targetDevice = clipboardTargetDevice
-                                showClipboardModal = false
-                                if (clipboardText.isNotEmpty() && targetDevice != null) {
-                                    scope.launch {
-                                        TransferManager.sendClipboardToDevice(
-                                            context,
-                                            targetDevice,
-                                            clipboardText
-                                        )
-                                    }
+                                val targetDevice = viewModel.clipboardTargetDevice
+                                if (targetDevice != null) {
+                                    viewModel.sendClipboard(targetDevice, viewModel.clipboardText)
                                 }
                             },
-                            onDismiss = { showClipboardModal = false }
+                            onDismiss = { viewModel.showClipboardModal = false }
                         )
                     }
 
-                    if (pendingShareUris.isNotEmpty()) {
+                    if (viewModel.pendingShareUris.isNotEmpty()) {
                         val onlineDevices =
                             otherDevices.filter { it.status.lowercase() == "online" }
-                        AlertDialog(
-                            onDismissRequest = { pendingShareUris = emptyList() },
-                            title = { Text(stringResource(R.string.title_upload_to_device)) },
-                            text = {
-                                Column {
-                                    if (onlineDevices.isEmpty()) {
-                                        Text(stringResource(R.string.msg_no_online_devices))
-                                    } else {
-                                        onlineDevices.forEach { device ->
-                                            Surface(
-                                                modifier = Modifier
-                                                    .fillMaxWidth()
-                                                    .clickable {
-                                                        val uris = pendingShareUris
-                                                        pendingShareUris = emptyList()
-                                                        scope.launch {
-                                                            TransferManager.sendFilesToDevice(
-                                                                context,
-                                                                device,
-                                                                uris,
-                                                                onProgress = { transferStatus = it }
-                                                            )
-                                                        }
-                                                    }
-                                                    .padding(vertical = 12.dp)
-                                            ) {
-                                                Text(device.deviceName)
-                                            }
-                                        }
-                                    }
-                                }
+                        ShareSheetDialog(
+                            onlineDevices = onlineDevices,
+                            onDismiss = { viewModel.clearPendingShare() },
+                            onDeviceSelect = { device ->
+                                viewModel.sendFiles(device, viewModel.pendingShareUris)
+                                viewModel.clearPendingShare()
                             },
-                            confirmButton = {},
-                            dismissButton = {
-                                Surface(modifier = Modifier.clickable {
-                                    pendingShareUris = emptyList()
-                                }) {
-                                    Text(
-                                        stringResource(R.string.btn_cancel),
-                                        modifier = Modifier.padding(8.dp)
-                                    )
-                                }
-                            }
+                            pendingShareUris = viewModel.pendingShareUris,
                         )
                     }
                 }
@@ -587,11 +290,8 @@ class MainActivity : ComponentActivity() {
             authManager.handleDeepLinkIntent(
                 uri = uri,
                 onSuccess = {
-                    Toast.makeText(
-                        this,
-                        getString(R.string.msg_login_success),
-                        Toast.LENGTH_SHORT
-                    ).show()
+                    Toast.makeText(this, getString(R.string.msg_login_success), Toast.LENGTH_SHORT)
+                        .show()
                 },
                 onError = { e ->
                     Toast.makeText(

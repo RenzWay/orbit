@@ -104,6 +104,7 @@
     <string name="msg_login_success">Login Successful!</string>
     <string name="msg_login_failed">Login failed: %1$s</string>
     <string name="title_upload_to_device">Upload to device?</string>
+    <string name="msg_send_files_to">Sending %1$d files to:</string>
     <string name="msg_no_online_devices">No devices are online right now. Open Orbit on the target device first.</string>
     <string name="btn_cancel">Cancel</string>
 
