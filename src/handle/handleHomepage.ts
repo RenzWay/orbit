@@ -5,7 +5,6 @@ import { orbitModel } from "@/models/orbitModel";
 import {
   newTransferId,
   notifyDeviceConnected,
-  showTransferProgress,
   showTransferResult,
 } from "@/notification/NotificationService";
 import { webRTCService } from "@/services/webrtcService";
@@ -341,7 +340,6 @@ export function useHomePageHandlers(userId: string) {
     for (const file of filesToSend) {
       const notifId = newTransferId();
       sendNotifIdRef.current = notifId;
-      showTransferProgress(notifId, file.name, 0, true);
 
       try {
         await webRTCService.waitForConnection();

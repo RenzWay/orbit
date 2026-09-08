@@ -5,7 +5,9 @@ import {
   CircleAlert,
   FileText,
   LoaderCircle,
+  X,
 } from "lucide-react";
+import { useEffect, useState } from "react";
 import type { TransferProgressProps, TransferState } from "@/types/orbit";
 
 function TransferItem({
@@ -98,7 +100,23 @@ export function TransferProgress({
   sendTransfer,
   receiveTransfer,
 }: TransferProgressProps) {
-  if (!sendTransfer && !receiveTransfer) return null;
+  const [isVisible, setIsVisible] = useState(true);
+  const transfers = [sendTransfer, receiveTransfer].filter(
+    (transfer): transfer is TransferState => transfer !== null,
+  );
+  const hasActiveTransfer = transfers.some(
+    (transfer) => transfer.status === "transferring",
+  );
+  const allTransfersFinished = transfers.length > 0 && !hasActiveTransfer;
+
+  useEffect(() => {
+    if (!allTransfersFinished) return;
+
+    const timeout = window.setTimeout(() => setIsVisible(false), 5000);
+    return () => window.clearTimeout(timeout);
+  }, [allTransfersFinished]);
+
+  if (!isVisible || transfers.length === 0) return null;
 
   return (
     <section className="relative overflow-hidden rounded-3xl border border-slate-800 bg-slate-900/75 p-4 shadow-xl shadow-slate-950/20">
@@ -112,9 +130,19 @@ export function TransferProgress({
             Direct device-to-device transfer via P2P
           </p>
         </div>
-        <span className="rounded-full border border-slate-700 bg-slate-950/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
-          P2P
-        </span>
+        <div className="flex items-center gap-2">
+          <span className="rounded-full border border-slate-700 bg-slate-950/60 px-2.5 py-1 text-[10px] font-semibold uppercase tracking-wider text-slate-400">
+            P2P
+          </span>
+          <button
+            type="button"
+            onClick={() => setIsVisible(false)}
+            aria-label="Close transfer progress"
+            title="Close transfer progress"
+            className="rounded-lg p-1.5 text-slate-500 transition-colors hover:bg-slate-800 hover:text-slate-200">
+            <X size={16} />
+          </button>
+        </div>
       </div>
 
       <div className="grid gap-2.5 sm:grid-cols-2">

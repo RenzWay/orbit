@@ -2,6 +2,7 @@
 import { DeviceCard } from "@/components/card/DeviceCard";
 import { ContextMenuHome } from "@/components/context/ContextMenuHome";
 import { ClipboardModal } from "@/components/other/ClipboardModal";
+import { StagedFile } from "@/components/other/StagedFile";
 import { TransferProgress } from "@/components/progress/TransferProgress";
 import { Avatar, AvatarBadge, AvatarFallback } from "@/components/ui/avatar";
 import { Button } from "@/components/ui/button";
@@ -12,7 +13,6 @@ import {
   RefreshCw,
   Send,
   UploadCloud,
-  X,
 } from "lucide-react";
 
 export default function HomePage({ userId }: { userId: string }) {
@@ -164,58 +164,15 @@ export default function HomePage({ userId }: { userId: string }) {
                 </label>
 
                 {stagedFiles.length > 0 ? (
-                  <div className="bg-slate-900/60 border border-slate-800 rounded-2xl p-4 flex flex-col gap-3 max-h-56">
-                    <div className="flex items-center justify-between">
-                      <p className="text-xs font-medium text-slate-300">
-                        {stagedFiles.length} file ready to send
-                      </p>
-
-                      <button
-                        onClick={() => setStagedFiles([])}
-                        className="text-xs text-slate-500 hover:text-red-400 transition-colors">
-                        Clear all
-                      </button>
-                    </div>
-
-                    <div className="flex flex-col gap-1.5 overflow-y-auto pr-1">
-                      {stagedFiles.map((file, index) => (
-                        <div
-                          key={`${file.name}-${file.lastModified}-${index}`}
-                          className="flex items-center justify-between gap-2 bg-slate-800/60 rounded-lg px-3 py-2">
-                          <div className="min-w-0">
-                            <p className="text-xs text-slate-200 truncate">
-                              {file.name}
-                            </p>
-
-                            <p className="text-[10px] text-slate-500">
-                              {formatFileSize(file.size)}
-                            </p>
-                          </div>
-
-                          <button
-                            onClick={() => handleRemoveStagedFile(index)}
-                            className="shrink-0 text-slate-500 hover:text-red-400 transition-colors">
-                            <X size={14} />
-                          </button>
-                        </div>
-                      ))}
-                    </div>
-
-                    <Button
-                      onClick={handleSendStagedFiles}
-                      disabled={
-                        isSendingStaged || selectedDevice.status !== "online"
-                      }
-                      className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl h-11 gap-2 disabled:opacity-50">
-                      <Send size={16} />
-
-                      {isSendingStaged
-                        ? "Sending..."
-                        : `Send ${stagedFiles.length} file`}
-                    </Button>
-                  </div>
+                  <StagedFile
+                    stagedFiles={stagedFiles}
+                    setStagedFiles={setStagedFiles}
+                    formatFileSize={formatFileSize}
+                    handleRemoveStagedFile={handleRemoveStagedFile}
+                  />
                 ) : sendTransfer || receiveTransfer ? (
                   <TransferProgress
+                    key={`${sendTransfer?.fileName ?? ""}-${sendTransfer?.status ?? ""}-${receiveTransfer?.fileName ?? ""}-${receiveTransfer?.status ?? ""}`}
                     sendTransfer={sendTransfer}
                     receiveTransfer={receiveTransfer}
                   />
@@ -224,11 +181,15 @@ export default function HomePage({ userId }: { userId: string }) {
                 <div className="flex gap-3 justify-end items-center">
                   <Button
                     size="lg"
-                    onClick={handleConnectP2P}
-                    disabled={selectedDevice.status !== "online"}
+                    onClick={handleSendStagedFiles}
+                    disabled={
+                      isSendingStaged ||
+                      stagedFiles.length === 0 ||
+                      selectedDevice.status !== "online"
+                    }
                     className="bg-sky-600 hover:bg-sky-700 text-white rounded-xl px-6 h-12 gap-2 shadow-lg disabled:opacity-50">
                     <Send size={18} />
-                    Connect
+                    {isSendingStaged ? "Sending..." : `Send ${stagedFiles.length} file`}
                   </Button>
                   <ClipboardModal
                     handle={handleConnectP2P}
