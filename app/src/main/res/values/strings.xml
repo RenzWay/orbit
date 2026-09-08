@@ -110,4 +110,6 @@
 
     <string name="btn_cancel_transfer">Cancel</string>
     <string name="msg_transfer_cancelled">Transfer cancelled</string>
+    <string name="msg_network_status_lost">Connection lost. Please make sure you have an active internet connection.</string>
+    <string name="msg_network_status_available">Back online</string>
 </resources>

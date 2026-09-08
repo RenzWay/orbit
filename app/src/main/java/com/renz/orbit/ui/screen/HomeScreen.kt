@@ -23,6 +23,7 @@ import androidx.compose.material3.SnackbarHostState
 import androidx.compose.material3.Text
 import androidx.compose.material3.pulltorefresh.PullToRefreshBox
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -46,6 +47,7 @@ import com.renz.orbit.ui.components.QuickActions
 import com.renz.orbit.ui.components.StatusBanner
 import com.renz.orbit.ui.components.TransferProgressCard
 import com.renz.orbit.ui.theme.OrbitTheme
+import com.renz.orbit.util.NetworkObserver
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlin.time.Duration.Companion.milliseconds
@@ -63,8 +65,12 @@ fun HomeScreen(
     onSettingClick: () -> Unit = {},
     onCancelTransfer: () -> Unit = {},
     transferStatus: TransferStatus? = null,
+    networkStatus: NetworkObserver.Status,
     modifier: Modifier
 ) {
+    val msgLostStatus = stringResource(R.string.msg_network_status_lost)
+    val msgAvailableStatus = stringResource(R.string.msg_network_status_available)
+
     var selectedDevice by remember { mutableStateOf<Device?>(null) }
     var isRefreshing by remember { mutableStateOf(false) }
     val scope = rememberCoroutineScope()
@@ -72,6 +78,17 @@ fun HomeScreen(
 
     val sortedDevices = remember(devices) {
         devices.sortedByDescending { it.status.lowercase() == "online" }
+    }
+
+    LaunchedEffect(networkStatus) {
+        if (networkStatus == NetworkObserver.Status.Lost) {
+            snackbarHostState.showSnackbar(
+                message = msgLostStatus,
+                actionLabel = "OK"
+            )
+        } else if (networkStatus == NetworkObserver.Status.Available) {
+            snackbarHostState.showSnackbar(message = msgAvailableStatus)
+        }
     }
 
     Scaffold(
@@ -196,7 +213,8 @@ fun HomeScreen(
 private fun HomeScreenPreview() {
     OrbitTheme() {
         HomeScreen(
-            modifier = Modifier
+            modifier = Modifier,
+            networkStatus = NetworkObserver.Status.Lost
         )
     }
 }

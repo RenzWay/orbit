@@ -30,6 +30,8 @@
     <string name="orbit_online">Orbit sedang online</string>
     <string name="orbit_offline">Orbit sedang Offline</string>
     <string name="desc_wifi">Status Wifi</string>
+    <string name="msg_network_status_lost">Koneksi terputus pastikan koneksi internet aktif</string>
+    <string name="msg_network_status_available">Kembali online</string>
 
     <!-- Layar Beranda -->
     <string name="available_devices">Perangkat yang Tersedia</string>

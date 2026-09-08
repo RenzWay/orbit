@@ -98,6 +98,8 @@ class NotificationListener : NotificationListenerService() {
     override fun onNotificationPosted(sbn: StatusBarNotification) {
         super.onNotificationPosted(sbn)
 
+        if (sbn.packageName == applicationContext.packageName) return
+
         notifications[sbn.key] = sbn
 
         send(
@@ -107,6 +109,8 @@ class NotificationListener : NotificationListenerService() {
 
     override fun onNotificationRemoved(sbn: StatusBarNotification) {
         super.onNotificationRemoved(sbn)
+
+        if (sbn.packageName == applicationContext.packageName) return
 
         notifications.remove(sbn.key)
 

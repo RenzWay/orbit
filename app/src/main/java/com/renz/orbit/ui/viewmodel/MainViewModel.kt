@@ -14,6 +14,7 @@ import android.widget.Toast
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
+import androidx.core.content.edit
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
 import com.google.firebase.auth.FirebaseAuth
@@ -25,17 +26,20 @@ import com.renz.orbit.service.Device
 import com.renz.orbit.service.OrbitRuntime
 import com.renz.orbit.service.TransferManager
 import com.renz.orbit.ui.navigation.Screen
+import com.renz.orbit.util.NetworkObserver
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.flow.launchIn
+import kotlinx.coroutines.flow.onEach
 import kotlinx.coroutines.launch
 import org.json.JSONObject
 import java.io.File
 import java.io.FileOutputStream
 import java.io.OutputStream
-import androidx.core.content.edit
 
 class MainViewModel(application: Application) : AndroidViewModel(application) {
     private val context = application.applicationContext
     private val prefs = application.getSharedPreferences("Settings", Context.MODE_PRIVATE)
+    private val networkObserver = NetworkObserver(context)
     
     private val authStateListener = FirebaseAuth.AuthStateListener { firebaseAuth ->
         currentUser = firebaseAuth.currentUser
@@ -47,6 +51,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
 
     // Theme State
     var themeSetting by mutableStateOf(prefs.getString("theme", "system") ?: "system")
+        private set
+
+    // Connectivity State
+    var networkStatus by mutableStateOf(NetworkObserver.Status.Available)
         private set
 
     // Transfer States
@@ -74,6 +82,10 @@ class MainViewModel(application: Application) : AndroidViewModel(application) {
     init {
         FirebaseAuth.getInstance().addAuthStateListener(authStateListener)
         setupWebRtcHandlers()
+        
+        networkObserver.observe.onEach {
+            networkStatus = it
+        }.launchIn(viewModelScope)
     }
 
     override fun onCleared() {
